@@ -38,8 +38,7 @@ public struct LyricLine: Equatable, Codable {
         let totalDuration = max(0.4, end - start)
         
         // Natural singing duration: human vocals average ~0.12 - 0.16s per character
-        // Never stretch words unnaturally across long instrumental gaps!
-        let naturalVocalDuration = max(1.2, min(Double(totalChars) * 0.15, totalDuration))
+        let naturalVocalDuration = max(1.0, min(Double(totalChars) * 0.14, totalDuration))
         let vocalTime = min(totalDuration, naturalVocalDuration)
         
         var cursor = start
@@ -47,7 +46,7 @@ public struct LyricLine: Equatable, Codable {
         
         for word in rawWords {
             let ratio = Double(max(1, word.count)) / Double(totalChars)
-            let wordDuration = max(0.20, vocalTime * ratio)
+            let wordDuration = max(0.18, vocalTime * ratio)
             let wordEnd = min(cursor + wordDuration, end)
             result.append(LyricWord(text: word, startTime: cursor, endTime: wordEnd))
             cursor = wordEnd
@@ -75,21 +74,14 @@ public struct ParsedLyrics: Equatable, Codable {
             return -1
         }
         
-        // Check active line ranges
-        for (idx, line) in lines.enumerated() {
-            if position >= line.startTime && position < line.endTime {
-                return idx
+        // Find the most recent line that has started
+        for i in stride(from: lines.count - 1, through: 0, by: -1) {
+            if position >= lines[i].startTime {
+                return i
             }
         }
         
-        // In gap between lines: hold previous line until next starts
-        for idx in 0..<(lines.count - 1) {
-            if position >= lines[idx].endTime && position < lines[idx + 1].startTime {
-                return idx
-            }
-        }
-        
-        return lines.count - 1
+        return 0
     }
 }
 
@@ -145,14 +137,21 @@ public final class LyricsEngine {
                 return
             }
             
-            // 2. Try Kugou synced database
+            // 2. Try NetEase CloudSearch Synced API
+            if let lyrics = self.fetchFromNetEase(title: cleanTitle, artist: cleanArtist, duration: duration) {
+                self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
+                DispatchQueue.main.async { completion(lyrics) }
+                return
+            }
+            
+            // 3. Try Kugou Synced database
             if let lyrics = self.fetchFromKugou(title: cleanTitle, artist: cleanArtist, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
                 return
             }
             
-            // 3. Try LRCLIB plain text fallback
+            // 4. Try LRCLIB plain text fallback
             if let lyrics = self.fetchPlainFromLRCLIB(title: cleanTitle, artist: cleanArtist, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
@@ -202,7 +201,7 @@ public final class LyricsEngine {
             }
         }
         task.resume()
-        _ = semaphore.wait(timeout: .now() + 3.5)
+        _ = semaphore.wait(timeout: .now() + 3.0)
         
         if result == nil {
             result = searchLRCLIB(query: "\(title) \(artist)", duration: duration)
@@ -242,39 +241,64 @@ public final class LyricsEngine {
             }
         }
         task.resume()
-        _ = semaphore.wait(timeout: .now() + 3.5)
+        _ = semaphore.wait(timeout: .now() + 3.0)
         return result
     }
     
-    private func fetchPlainFromLRCLIB(title: String, artist: String, duration: TimeInterval) -> ParsedLyrics? {
-        guard let encoded = "\(title) \(artist)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://lrclib.net/api/search?q=\(encoded)") else { return nil }
+    // MARK: - NetEase Provider
+    
+    private func fetchFromNetEase(title: String, artist: String, duration: TimeInterval) -> ParsedLyrics? {
+        let query = "\(title) \(artist)"
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let searchURL = URL(string: "https://music.163.com/api/cloudsearch/pc?s=\(encoded)&type=1&offset=0&limit=5") else { return nil }
         
-        var request = URLRequest(url: url)
-        request.setValue("Lyrico/1.0", forHTTPHeaderField: "User-Agent")
+        var searchReq = URLRequest(url: searchURL)
+        searchReq.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+        searchReq.setValue("https://music.163.com", forHTTPHeaderField: "Referer")
         
         let semaphore = DispatchSemaphore(value: 0)
-        var result: ParsedLyrics?
+        var songID: Int?
         
-        let task = session.dataTask(with: request) { [weak self] data, response, error in
+        let searchTask = session.dataTask(with: searchReq) { data, _, _ in
             defer { semaphore.signal() }
-            guard let data = data, error == nil else { return }
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let result = json["result"] as? [String: Any],
+                  let songs = result["songs"] as? [[String: Any]],
+                  let first = songs.first,
+                  let id = first["id"] as? Int else { return }
+            songID = id
+        }
+        searchTask.resume()
+        _ = semaphore.wait(timeout: .now() + 3.0)
+        
+        guard let id = songID,
+              let lyricURL = URL(string: "https://music.163.com/api/song/lyric?os=pc&id=\(id)&lv=-1&kv=-1&tv=-1") else {
+            return nil
+        }
+        
+        var lyricReq = URLRequest(url: lyricURL)
+        lyricReq.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+        
+        let dlSem = DispatchSemaphore(value: 0)
+        var parsed: ParsedLyrics?
+        
+        let lyricTask = session.dataTask(with: lyricReq) { [weak self] data, _, _ in
+            defer { dlSem.signal() }
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let lrcObj = json["lrc"] as? [String: Any],
+                  let lrcText = lrcObj["lyric"] as? String, !lrcText.isEmpty else { return }
             
-            if let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                for item in list {
-                    if let plain = item["plainLyrics"] as? String, !plain.isEmpty {
-                        let lines = self?.interpolatePlainLyrics(plain, duration: duration) ?? []
-                        if !lines.isEmpty {
-                            result = ParsedLyrics(lines: lines, isSynced: false, source: "LRCLIB Plain (Smart Timing)")
-                            return
-                        }
-                    }
-                }
+            let lines = self?.parseLRC(lrcText, duration: duration) ?? []
+            if !lines.isEmpty {
+                parsed = ParsedLyrics(lines: lines, isSynced: true, source: "NetEase")
             }
         }
-        task.resume()
-        _ = semaphore.wait(timeout: .now() + 3.5)
-        return result
+        lyricTask.resume()
+        _ = dlSem.wait(timeout: .now() + 3.0)
+        
+        return parsed
     }
     
     // MARK: - Kugou Provider
@@ -332,18 +356,62 @@ public final class LyricsEngine {
         return parsed
     }
     
+    private func fetchPlainFromLRCLIB(title: String, artist: String, duration: TimeInterval) -> ParsedLyrics? {
+        guard let encoded = "\(title) \(artist)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://lrclib.net/api/search?q=\(encoded)") else { return nil }
+        
+        var request = URLRequest(url: url)
+        request.setValue("Lyrico/1.0", forHTTPHeaderField: "User-Agent")
+        
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: ParsedLyrics?
+        
+        let task = session.dataTask(with: request) { [weak self] data, response, error in
+            defer { semaphore.signal() }
+            guard let data = data, error == nil else { return }
+            
+            if let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                for item in list {
+                    if let plain = item["plainLyrics"] as? String, !plain.isEmpty {
+                        let lines = self?.interpolatePlainLyrics(plain, duration: duration) ?? []
+                        if !lines.isEmpty {
+                            result = ParsedLyrics(lines: lines, isSynced: false, source: "LRCLIB Plain (Smart Timing)")
+                            return
+                        }
+                    }
+                }
+            }
+        }
+        task.resume()
+        _ = semaphore.wait(timeout: .now() + 3.0)
+        return result
+    }
+    
     // MARK: - Enhanced LRC Parser
     
     public func parseLRC(_ lrc: String, duration: TimeInterval) -> [LyricLine] {
         var rawLines: [(time: TimeInterval, text: String, words: [LyricWord])] = []
         let lineRegex = try? NSRegularExpression(pattern: "\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})\\](.*)")
         let wordTagRegex = try? NSRegularExpression(pattern: "<(\\d{2}):(\\d{2})\\.(\\d{2,3})>([^<]+)")
+        let offsetRegex = try? NSRegularExpression(pattern: "\\[offset:([+-]?\\d+)\\]", options: .caseInsensitive)
+        
+        var offsetSeconds: TimeInterval = 0.0
         
         for line in lrc.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
             
             let nsString = trimmed as NSString
+            
+            // Check for offset header
+            if let offMatch = offsetRegex?.firstMatch(in: trimmed, range: NSRange(location: 0, length: nsString.length)) {
+                let offStr = nsString.substring(with: offMatch.range(at: 1))
+                if let offMs = Double(offStr) {
+                    offsetSeconds = offMs / 1000.0
+                }
+                continue
+            }
+            
             let matches = lineRegex?.matches(in: trimmed, range: NSRange(location: 0, length: nsString.length)) ?? []
             
             for match in matches {
@@ -358,9 +426,10 @@ public final class LyricsEngine {
                       let fractions = Double(msStr) else { continue }
                 
                 let msDivider = msStr.count == 2 ? 100.0 : 1000.0
-                let totalTime = (minutes * 60.0) + seconds + (fractions / msDivider)
+                let totalTime = (minutes * 60.0) + seconds + (fractions / msDivider) + offsetSeconds
                 
-                if !content.isEmpty && !content.hasPrefix("//") {
+                // Skip metadata headers like [ar:], [al:], [ti:], [by:], [length:], 作词, 作曲
+                if !content.isEmpty && !content.hasPrefix("//") && !content.hasPrefix("作词") && !content.hasPrefix("作曲") {
                     var parsedWords: [LyricWord] = []
                     let contentNS = content as NSString
                     let wordMatches = wordTagRegex?.matches(in: content, range: NSRange(location: 0, length: contentNS.length)) ?? []
@@ -373,10 +442,10 @@ public final class LyricsEngine {
                             let wSec = Double(contentNS.substring(with: wMatch.range(at: 2))) ?? 0
                             let wMs = Double(contentNS.substring(with: wMatch.range(at: 3))) ?? 0
                             let wText = contentNS.substring(with: wMatch.range(at: 4)).trimmingCharacters(in: .whitespaces)
-                            let wTime = (wMin * 60.0) + wSec + (wMs / 100.0)
+                            let wTime = (wMin * 60.0) + wSec + (wMs / 100.0) + offsetSeconds
                             
                             cleanText += (cleanText.isEmpty ? "" : " ") + wText
-                            parsedWords.append(LyricWord(text: wText, startTime: prevWordTime, endTime: max(prevWordTime + 0.25, wTime)))
+                            parsedWords.append(LyricWord(text: wText, startTime: prevWordTime, endTime: max(prevWordTime + 0.20, wTime)))
                             prevWordTime = wTime
                         }
                         rawLines.append((time: totalTime, text: cleanText, words: parsedWords))
@@ -397,7 +466,7 @@ public final class LyricsEngine {
             let words = rawLines[i].words
             let end: TimeInterval
             if i + 1 < rawLines.count {
-                end = max(start + 0.5, rawLines[i + 1].time)
+                end = max(start + 0.4, rawLines[i + 1].time)
             } else {
                 end = duration > start ? duration : start + 5.0
             }

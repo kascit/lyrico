@@ -174,13 +174,13 @@ final class LyricoApp: NSObject, NSApplicationDelegate, SpotifyTrackerDelegate, 
             ConfigManager.shared.updateOffset(0.0)
             return "offset: 0.0s"
             
-        case "cycle-theme":
-            let next = ThemeManager.shared.cycleMode()
+        case "cycle-theme", "toggle-theme":
+            let next = ThemeManager.shared.toggleTheme()
             return "theme: \(next.rawValue)"
             
         case "set-theme":
-            let modeStr = parts.count > 1 ? parts[1] : "system"
-            let mode = AppThemeMode(rawValue: modeStr) ?? .system
+            let modeStr = parts.count > 1 ? parts[1] : "dark"
+            let mode = AppThemeMode(rawValue: modeStr) ?? .dark
             ThemeManager.shared.currentMode = mode
             return "theme: \(mode.rawValue)"
             

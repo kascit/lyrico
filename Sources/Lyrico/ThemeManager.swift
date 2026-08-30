@@ -3,8 +3,6 @@ import Cocoa
 public enum AppThemeMode: String, Codable, CaseIterable {
     case dark = "dark"
     case light = "light"
-    case ambient = "ambient"
-    case system = "system"
 }
 
 public struct ComputedColors {
@@ -35,13 +33,29 @@ public final class ThemeManager {
     
     public init() {
         let saved = ConfigManager.shared.config.theme
-        self.currentMode = AppThemeMode(rawValue: saved) ?? .dark
+        if saved == "light" {
+            self.currentMode = .light
+        } else if saved == "dark" {
+            self.currentMode = .dark
+        } else {
+            self.currentMode = isSystemDark ? .dark : .light
+        }
+        
+        setupSystemAppearanceObserver()
     }
     
-    private func notifyObservers() {
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: ThemeManager.themeDidChangeNotification, object: nil)
-        }
+    private func setupSystemAppearanceObserver() {
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(handleSystemThemeChanged),
+            name: NSNotification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil
+        )
+    }
+    
+    @objc private func handleSystemThemeChanged() {
+        let isDark = self.isSystemDark
+        self.currentMode = isDark ? .dark : .light
     }
     
     public var isSystemDark: Bool {
@@ -52,11 +66,9 @@ public final class ThemeManager {
         return appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
     
-    public var isDarkEffective: Bool {
-        switch currentMode {
-        case .dark, .ambient: return true
-        case .light: return false
-        case .system: return isSystemDark
+    private func notifyObservers() {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: ThemeManager.themeDidChangeNotification, object: nil)
         }
     }
     
@@ -66,10 +78,6 @@ public final class ThemeManager {
             return makeDarkColors()
         case .light:
             return makeLightColors()
-        case .ambient:
-            return makeAmbientColors()
-        case .system:
-            return isSystemDark ? makeDarkColors() : makeLightColors()
         }
     }
     
@@ -77,7 +85,7 @@ public final class ThemeManager {
         return ComputedColors(
             cardBackground: NSColor(red: 0.05, green: 0.06, blue: 0.09, alpha: 0.65), // Translucent black pill
             border: NSColor(white: 1.0, alpha: 0.22),
-            activeText: NSColor(white: 1.0, alpha: 1.0), // Pure crisp white text
+            activeText: NSColor(white: 1.0, alpha: 1.0), // Crisp solid white text
             sungText: NSColor(white: 1.0, alpha: 0.94),
             upcomingText: NSColor(white: 1.0, alpha: 0.44),
             glowColor: NSColor(white: 1.0, alpha: 0.30),
@@ -90,7 +98,7 @@ public final class ThemeManager {
         return ComputedColors(
             cardBackground: NSColor(red: 0.96, green: 0.97, blue: 0.99, alpha: 0.85), // Translucent white pill
             border: NSColor(white: 0.0, alpha: 0.22),
-            activeText: NSColor(white: 0.04, alpha: 1.0), // Pure crisp deep black text (#0a0a0c)
+            activeText: NSColor(white: 0.04, alpha: 1.0), // Crisp solid deep black text (#0a0a0c)
             sungText: NSColor(white: 0.12, alpha: 0.94),
             upcomingText: NSColor(white: 0.24, alpha: 0.52),
             glowColor: NSColor(white: 0.0, alpha: 0.15),
@@ -99,30 +107,9 @@ public final class ThemeManager {
         )
     }
     
-    private func makeAmbientColors() -> ComputedColors {
-        var hue: CGFloat = 0, sat: CGFloat = 0, bri: CGFloat = 0, a: CGFloat = 0
-        albumAccentColor.usingColorSpace(.sRGB)?.getHue(&hue, saturation: &sat, brightness: &bri, alpha: &a)
-        
-        let ambientTint = NSColor(hue: hue, saturation: max(0.40, sat * 0.8), brightness: 0.20, alpha: 0.65)
-        let ambientFS = NSColor(hue: hue, saturation: max(0.50, sat), brightness: 0.06, alpha: 0.98)
-        let subtleGlow = albumAccentColor.withAlphaComponent(0.45)
-        
-        return ComputedColors(
-            cardBackground: ambientTint,
-            border: albumAccentColor.withAlphaComponent(0.40),
-            activeText: NSColor.white,
-            sungText: NSColor(white: 1.0, alpha: 0.94),
-            upcomingText: NSColor(white: 0.90, alpha: 0.44),
-            glowColor: subtleGlow,
-            fullscreenBackground: ambientFS,
-            isDark: true
-        )
-    }
-    
-    public func cycleMode() -> AppThemeMode {
-        let all = AppThemeMode.allCases
-        guard let idx = all.firstIndex(of: currentMode) else { return .dark }
-        let next = all[(idx + 1) % all.count]
+    @discardableResult
+    public func toggleTheme() -> AppThemeMode {
+        let next: AppThemeMode = (currentMode == .dark) ? .light : .dark
         currentMode = next
         return next
     }
