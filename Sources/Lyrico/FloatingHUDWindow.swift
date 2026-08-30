@@ -120,17 +120,22 @@ public final class FloatingHUDView: NSView {
         wantsLayer = true
         setupUI()
         
-        ThemeManager.shared.onThemeChange = { [weak self] in
-            DispatchQueue.main.async {
-                self?.applyTheme()
-            }
-        }
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleThemeDidChange),
+            name: ThemeManager.themeDidChangeNotification,
+            object: nil
+        )
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     
     private func setupUI() {
-        // True Translucent See-Through Glass Card (no opaque blur)
+        // True Translucent Glass Card
         cardView.wantsLayer = true
         cardView.layer?.cornerRadius = 18.0
         cardView.layer?.masksToBounds = true
@@ -198,6 +203,10 @@ public final class FloatingHUDView: NSView {
         }
     }
     
+    @objc private func handleThemeDidChange() {
+        applyTheme()
+    }
+    
     public func applyTheme() {
         let colors = ThemeManager.shared.resolveColors()
         cardView.layer?.backgroundColor = colors.cardBackground.cgColor
@@ -217,7 +226,6 @@ public final class FloatingHUDView: NSView {
         let isNewLine = line.text != lastLineText
         
         if isNewLine && !line.text.isEmpty {
-            // Logical upward scroll animation: old line moves UP, new line arrives from below
             let pushUpTransition = CATransition()
             pushUpTransition.duration = 0.26
             pushUpTransition.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)

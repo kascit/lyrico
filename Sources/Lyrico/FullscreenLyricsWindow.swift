@@ -32,13 +32,22 @@ public final class FullscreenLyricsWindow: NSPanel {
         self.ignoresMouseEvents = false
         self.hidesOnDeactivate = false
         
-        ThemeManager.shared.onThemeChange = { [weak self] in
-            DispatchQueue.main.async {
-                let c = ThemeManager.shared.resolveColors()
-                self?.backgroundColor = c.fullscreenBackground
-                self?.fullscreenView.applyTheme()
-            }
-        }
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleThemeDidChange),
+            name: ThemeManager.themeDidChangeNotification,
+            object: nil
+        )
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    @objc private func handleThemeDidChange() {
+        let c = ThemeManager.shared.resolveColors()
+        self.backgroundColor = c.fullscreenBackground
+        self.fullscreenView.applyTheme()
     }
     
     public func showFullscreen(animated: Bool = true) {

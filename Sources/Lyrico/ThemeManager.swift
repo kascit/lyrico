@@ -20,23 +20,28 @@ public struct ComputedColors {
 
 public final class ThemeManager {
     public static let shared = ThemeManager()
+    public static let themeDidChangeNotification = Notification.Name("LyricoThemeDidChangeNotification")
     
     public var currentMode: AppThemeMode = .dark {
         didSet {
             ConfigManager.shared.updateTheme(currentMode.rawValue)
-            onThemeChange?()
+            notifyObservers()
         }
     }
     
     public var albumAccentColor: NSColor = NSColor(red: 0.38, green: 0.82, blue: 1.00, alpha: 1.0) {
-        didSet { onThemeChange?() }
+        didSet { notifyObservers() }
     }
-    
-    public var onThemeChange: (() -> Void)?
     
     public init() {
         let saved = ConfigManager.shared.config.theme
         self.currentMode = AppThemeMode(rawValue: saved) ?? .dark
+    }
+    
+    private func notifyObservers() {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: ThemeManager.themeDidChangeNotification, object: nil)
+        }
     }
     
     public var isSystemDark: Bool {
@@ -72,7 +77,7 @@ public final class ThemeManager {
         return ComputedColors(
             cardBackground: NSColor(red: 0.05, green: 0.06, blue: 0.09, alpha: 0.65), // Translucent black pill
             border: NSColor(white: 1.0, alpha: 0.22),
-            activeText: NSColor(white: 1.0, alpha: 1.0), // Pure solid white text
+            activeText: NSColor(white: 1.0, alpha: 1.0), // Pure crisp white text
             sungText: NSColor(white: 1.0, alpha: 0.94),
             upcomingText: NSColor(white: 1.0, alpha: 0.44),
             glowColor: NSColor(white: 1.0, alpha: 0.30),
@@ -83,9 +88,9 @@ public final class ThemeManager {
     
     private func makeLightColors() -> ComputedColors {
         return ComputedColors(
-            cardBackground: NSColor(red: 0.96, green: 0.97, blue: 0.99, alpha: 0.82), // Crisp white pill
+            cardBackground: NSColor(red: 0.96, green: 0.97, blue: 0.99, alpha: 0.85), // Translucent white pill
             border: NSColor(white: 0.0, alpha: 0.22),
-            activeText: NSColor(white: 0.04, alpha: 1.0), // Pure solid black text (#0a0a0c)
+            activeText: NSColor(white: 0.04, alpha: 1.0), // Pure crisp deep black text (#0a0a0c)
             sungText: NSColor(white: 0.12, alpha: 0.94),
             upcomingText: NSColor(white: 0.24, alpha: 0.52),
             glowColor: NSColor(white: 0.0, alpha: 0.15),
