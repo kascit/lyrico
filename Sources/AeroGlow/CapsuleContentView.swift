@@ -8,10 +8,8 @@ public enum DisplayStyle: String, Codable {
 
 public final class CapsuleContentView: NSView {
     private let visualEffectView: NSVisualEffectView
-    private let pillLayer: CALayer
     private let activeLabel: NSTextField
     private let upcomingLabel: NSTextField
-    private let progressIndicator: CALayer
     
     public var currentStyle: DisplayStyle = .dualLine {
         didSet { updateLayout() }
@@ -21,15 +19,14 @@ public final class CapsuleContentView: NSView {
         didSet { updateTheme() }
     }
     
-    private var lastActiveText: String = ""
+    private var lastLineText: String = ""
     private var lastUpcomingText: String = ""
+    private var cachedActiveAttributedString: NSAttributedString?
     
     public override init(frame frameRect: NSRect) {
         self.visualEffectView = NSVisualEffectView(frame: .zero)
-        self.pillLayer = CALayer()
         self.activeLabel = NSTextField(labelWithString: "AeroGlow")
         self.upcomingLabel = NSTextField(labelWithString: "")
-        self.progressIndicator = CALayer()
         
         super.init(frame: frameRect)
         wantsLayer = true
@@ -39,20 +36,20 @@ public final class CapsuleContentView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     
     private func setupUI() {
-        // Visual Effect (Frosted Glass)
+        // Ultra-translucent airy frosted glass
         visualEffectView.material = .hudWindow
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.state = .active
         visualEffectView.wantsLayer = true
         visualEffectView.layer?.cornerRadius = 28.0
         visualEffectView.layer?.masksToBounds = true
-        visualEffectView.layer?.backgroundColor = NSColor(red: 0.06, green: 0.07, blue: 0.11, alpha: 0.78).cgColor
-        visualEffectView.layer?.borderColor = NSColor(white: 1.0, alpha: 0.16).cgColor
+        visualEffectView.layer?.backgroundColor = NSColor(red: 0.05, green: 0.06, blue: 0.09, alpha: 0.28).cgColor
+        visualEffectView.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
         visualEffectView.layer?.borderWidth = 1.0
         visualEffectView.layer?.shadowColor = NSColor.black.cgColor
-        visualEffectView.layer?.shadowOpacity = 0.45
-        visualEffectView.layer?.shadowOffset = CGSize(width: 0, height: -8)
-        visualEffectView.layer?.shadowRadius = 24.0
+        visualEffectView.layer?.shadowOpacity = 0.25
+        visualEffectView.layer?.shadowOffset = CGSize(width: 0, height: -6)
+        visualEffectView.layer?.shadowRadius = 18.0
         addSubview(visualEffectView)
         
         // Active Lyric Label
@@ -66,7 +63,7 @@ public final class CapsuleContentView: NSView {
         
         // Upcoming Lyric Label
         upcomingLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
-        upcomingLabel.textColor = NSColor(white: 0.85, alpha: 0.45)
+        upcomingLabel.textColor = NSColor(white: 0.90, alpha: 0.40)
         upcomingLabel.alignment = .center
         upcomingLabel.lineBreakMode = .byTruncatingTail
         upcomingLabel.maximumNumberOfLines = 1
@@ -96,47 +93,101 @@ public final class CapsuleContentView: NSView {
         
         if currentStyle == .dualLine {
             activeLabel.frame = NSRect(x: 28, y: pillHeight - 44, width: pillWidth - 56, height: 30)
-            activeLabel.font = NSFont.systemFont(ofSize: 21, weight: .bold)
             upcomingLabel.isHidden = false
             upcomingLabel.frame = NSRect(x: 28, y: 10, width: pillWidth - 56, height: 18)
         } else {
             activeLabel.frame = NSRect(x: 28, y: (pillHeight - 30) / 2, width: pillWidth - 56, height: 30)
-            activeLabel.font = NSFont.systemFont(ofSize: 22, weight: .bold)
             upcomingLabel.isHidden = true
         }
     }
     
     public func updateTheme() {
         visualEffectView.layer?.borderColor = currentTheme.border.cgColor
-        applyGlowEffect(to: activeLabel, color: currentTheme.glow)
     }
     
-    private func applyGlowEffect(to label: NSTextField, color: NSColor) {
-        let shadow = NSShadow()
-        shadow.shadowColor = color
-        shadow.shadowOffset = NSSize(width: 0, height: 0)
-        shadow.shadowBlurRadius = 14.0
-        
-        label.shadow = shadow
-    }
+    // MARK: - Word-by-Word Karaoke Rendering
     
-    public func setLyrics(active: String, upcoming: String = "", animated: Bool = true) {
-        if active == lastActiveText && upcoming == lastUpcomingText { return }
+    public func renderKaraoke(line: LyricLine, currentPosition: TimeInterval, upcomingText: String) {
+        let isNewLine = line.text != lastLineText
         
-        if animated && !active.isEmpty && active != lastActiveText {
-            // Smooth vertical fade transition
+        if isNewLine && !line.text.isEmpty {
             let transition = CATransition()
-            transition.duration = 0.28
+            transition.duration = 0.26
             transition.timingFunction = CAMediaTimingFunction(name: .easeOut)
             transition.type = .push
             transition.subtype = .fromTop
-            activeLabel.layer?.add(transition, forKey: "lyricLineChange")
+            activeLabel.layer?.add(transition, forKey: "karaokeLinePush")
         }
         
-        activeLabel.stringValue = active.isEmpty ? "♫" : active
+        lastLineText = line.text
+        
+        if upcomingText != lastUpcomingText {
+            upcomingLabel.stringValue = upcomingText
+            lastUpcomingText = upcomingText
+        }
+        
+        // Build AttributedString with Word-Level Glowing Highlight
+        let attr = NSMutableAttributedString()
+        let paraStyle = NSMutableParagraphStyle()
+        paraStyle.alignment = .center
+        
+        let glowShadow = NSShadow()
+        glowShadow.shadowColor = currentTheme.glow
+        glowShadow.shadowOffset = .zero
+        glowShadow.shadowBlurRadius = 16.0
+        
+        for (i, word) in line.words.enumerated() {
+            let isCurrentWord = (currentPosition >= word.startTime && currentPosition < word.endTime)
+            let isSungWord = (currentPosition >= word.endTime)
+            
+            var attrs: [NSAttributedString.Key: Any] = [
+                .paragraphStyle: paraStyle
+            ]
+            
+            if isCurrentWord {
+                // Currently being sung (Active glowing word)
+                attrs[.font] = NSFont.systemFont(ofSize: 22, weight: .heavy)
+                attrs[.foregroundColor] = NSColor.white
+                attrs[.shadow] = glowShadow
+            } else if isSungWord {
+                // Already sung
+                attrs[.font] = NSFont.systemFont(ofSize: 21, weight: .bold)
+                attrs[.foregroundColor] = NSColor(white: 1.0, alpha: 0.95)
+            } else {
+                // Upcoming word in the sentence
+                attrs[.font] = NSFont.systemFont(ofSize: 21, weight: .medium)
+                attrs[.foregroundColor] = NSColor(white: 1.0, alpha: 0.38)
+            }
+            
+            let wordStr = (i == 0 ? "" : " ") + word.text
+            attr.append(NSAttributedString(string: wordStr, attributes: attrs))
+        }
+        
+        activeLabel.attributedStringValue = attr
+    }
+    
+    public func setStaticText(active: String, upcoming: String = "") {
+        if active == lastLineText && upcoming == lastUpcomingText { return }
+        
+        let paraStyle = NSMutableParagraphStyle()
+        paraStyle.alignment = .center
+        
+        let glowShadow = NSShadow()
+        glowShadow.shadowColor = currentTheme.glow
+        glowShadow.shadowOffset = .zero
+        glowShadow.shadowBlurRadius = 12.0
+        
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 21, weight: .bold),
+            .foregroundColor: NSColor.white,
+            .shadow: glowShadow,
+            .paragraphStyle: paraStyle
+        ]
+        
+        activeLabel.attributedStringValue = NSAttributedString(string: active.isEmpty ? "♫" : active, attributes: attrs)
         upcomingLabel.stringValue = upcoming
         
-        lastActiveText = active
+        lastLineText = active
         lastUpcomingText = upcoming
     }
     
@@ -144,7 +195,7 @@ public final class CapsuleContentView: NSView {
         let targetAlpha: CGFloat = visible ? 1.0 : 0.0
         if animated {
             NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.35
+                ctx.duration = 0.32
                 ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 self.animator().alphaValue = targetAlpha
             }

@@ -28,7 +28,7 @@ final class AeroGlowApp: NSObject, NSApplicationDelegate, SpotifyServiceDelegate
         spotifyService.delegate = self
         
         // Show initial greeting / waiting indicator
-        window.capsuleView.setLyrics(active: "AeroGlow", upcoming: "Waiting for Spotify playback...", animated: false)
+        window.capsuleView.setStaticText(active: "AeroGlow", upcoming: "Waiting for Spotify playback...")
     }
     
     // MARK: - SpotifyServiceDelegate
@@ -36,12 +36,12 @@ final class AeroGlowApp: NSObject, NSApplicationDelegate, SpotifyServiceDelegate
     func spotifyService(_ service: SpotifyService, didChangeTrack track: TrackInfo?) {
         guard let track = track else {
             currentLyrics = nil
-            window.capsuleView.setLyrics(active: "", upcoming: "", animated: true)
+            window.capsuleView.setStaticText(active: "", upcoming: "")
             return
         }
         
         // Reset and fetch lyrics
-        window.capsuleView.setLyrics(active: track.title, upcoming: track.artist, animated: true)
+        window.capsuleView.setStaticText(active: track.title, upcoming: track.artist)
         
         LyricsEngine.shared.fetchLyrics(
             title: track.title,
@@ -55,7 +55,7 @@ final class AeroGlowApp: NSObject, NSApplicationDelegate, SpotifyServiceDelegate
                 print("✅ Lyrics loaded: \(lyrics.lines.count) lines [\(lyrics.source)]")
             } else {
                 print("ℹ️ No lyrics available for: \(track.title) - \(track.artist)")
-                self.window.capsuleView.setLyrics(active: track.title, upcoming: track.artist, animated: true)
+                self.window.capsuleView.setStaticText(active: track.title, upcoming: track.artist)
             }
         }
         
@@ -90,9 +90,9 @@ final class AeroGlowApp: NSObject, NSApplicationDelegate, SpotifyServiceDelegate
         guard let lyrics = currentLyrics, !lyrics.lines.isEmpty else { return }
         
         if let activeIdx = lyrics.activeLineIndex(at: position) {
-            let activeLine = lyrics.lines[activeIdx].text
-            let upcomingLine = (activeIdx + 1 < lyrics.lines.count) ? lyrics.lines[activeIdx + 1].text : ""
-            window.capsuleView.setLyrics(active: activeLine, upcoming: upcomingLine, animated: true)
+            let activeLine = lyrics.lines[activeIdx]
+            let upcomingText = (activeIdx + 1 < lyrics.lines.count) ? lyrics.lines[activeIdx + 1].text : ""
+            window.capsuleView.renderKaraoke(line: activeLine, currentPosition: position, upcomingText: upcomingText)
         }
     }
     
@@ -152,9 +152,8 @@ final class AeroGlowApp: NSObject, NSApplicationDelegate, SpotifyServiceDelegate
     }
 }
 
-// MARK: - Entrypoint & CLI Command Handling
-
 let arguments = CommandLine.arguments
+var strongDelegate: AeroGlowApp?
 
 if arguments.count > 1 {
     let command = arguments[1]
@@ -162,8 +161,8 @@ if arguments.count > 1 {
     if command == "daemon" {
         // Run in foreground as daemon
         let app = NSApplication.shared
-        let delegate = AeroGlowApp()
-        app.delegate = delegate
+        strongDelegate = AeroGlowApp()
+        app.delegate = strongDelegate
         app.run()
     } else {
         // Send command to running instance
@@ -189,7 +188,7 @@ if arguments.count > 1 {
 } else {
     // No arguments -> run daemon
     let app = NSApplication.shared
-    let delegate = AeroGlowApp()
-    app.delegate = delegate
+    strongDelegate = AeroGlowApp()
+    app.delegate = strongDelegate
     app.run()
 }

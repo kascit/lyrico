@@ -1,15 +1,52 @@
 import Foundation
 import CryptoKit
 
+public struct LyricWord: Equatable, Codable {
+    public let text: String
+    public let startTime: TimeInterval
+    public let endTime: TimeInterval
+    
+    public init(text: String, startTime: TimeInterval, endTime: TimeInterval) {
+        self.text = text
+        self.startTime = startTime
+        self.endTime = endTime
+    }
+}
+
 public struct LyricLine: Equatable, Codable {
     public let startTime: TimeInterval
     public var endTime: TimeInterval
     public let text: String
+    public var words: [LyricWord]
     
-    public init(startTime: TimeInterval, endTime: TimeInterval, text: String) {
+    public init(startTime: TimeInterval, endTime: TimeInterval, text: String, words: [LyricWord] = []) {
         self.startTime = startTime
         self.endTime = endTime
         self.text = text
+        if !words.isEmpty {
+            self.words = words
+        } else {
+            self.words = LyricLine.generateWords(for: text, start: startTime, end: endTime)
+        }
+    }
+    
+    public static func generateWords(for lineText: String, start: TimeInterval, end: TimeInterval) -> [LyricWord] {
+        let rawWords = lineText.components(separatedBy: " ").filter { !$0.isEmpty }
+        guard !rawWords.isEmpty else { return [] }
+        
+        let totalChars = rawWords.reduce(0) { $0 + max(1, $1.count) }
+        let duration = max(0.4, end - start)
+        var cursor = start
+        var result: [LyricWord] = []
+        
+        for word in rawWords {
+            let ratio = Double(max(1, word.count)) / Double(totalChars)
+            let wordDuration = duration * ratio
+            let wordEnd = cursor + wordDuration
+            result.append(LyricWord(text: word, startTime: cursor, endTime: wordEnd))
+            cursor = wordEnd
+        }
+        return result
     }
 }
 
@@ -157,7 +194,6 @@ public final class LyricsEngine {
         _ = semaphore.wait(timeout: .now() + 3.5)
         
         if result == nil {
-            // Try LRCLIB search endpoint as backup
             result = searchLRCLIB(query: "\(title) \(artist)", duration: duration)
         }
         
@@ -281,25 +317,26 @@ public final class LyricsEngine {
         return parsed
     }
     
-    // MARK: - LRC Parser
+    // MARK: - Enhanced LRC Parser with Word-Level Parsing
     
     public func parseLRC(_ lrc: String, duration: TimeInterval) -> [LyricLine] {
-        var rawLines: [(time: TimeInterval, text: String)] = []
-        let regex = try? NSRegularExpression(pattern: "\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})\\](.*)")
+        var rawLines: [(time: TimeInterval, text: String, words: [LyricWord])] = []
+        let lineRegex = try? NSRegularExpression(pattern: "\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})\\](.*)")
+        let wordTagRegex = try? NSRegularExpression(pattern: "<(\\d{2}):(\\d{2})\\.(\\d{2,3})>([^<]+)")
         
         for line in lrc.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
             
             let nsString = trimmed as NSString
-            let matches = regex?.matches(in: trimmed, range: NSRange(location: 0, length: nsString.length)) ?? []
+            let matches = lineRegex?.matches(in: trimmed, range: NSRange(location: 0, length: nsString.length)) ?? []
             
             for match in matches {
                 guard match.numberOfRanges >= 5 else { continue }
                 let minStr = nsString.substring(with: match.range(at: 1))
                 let secStr = nsString.substring(with: match.range(at: 2))
                 let msStr = nsString.substring(with: match.range(at: 3))
-                let text = nsString.substring(with: match.range(at: 4)).trimmingCharacters(in: .whitespaces)
+                let content = nsString.substring(with: match.range(at: 4)).trimmingCharacters(in: .whitespaces)
                 
                 guard let minutes = Double(minStr),
                       let seconds = Double(secStr),
@@ -309,8 +346,32 @@ public final class LyricsEngine {
                 let totalTime = (minutes * 60.0) + seconds + (fractions / msDivider)
                 
                 // Skip empty instrumental tags
-                if !text.isEmpty && !text.hasPrefix("//") {
-                    rawLines.append((time: totalTime, text: text))
+                if !content.isEmpty && !content.hasPrefix("//") {
+                    var parsedWords: [LyricWord] = []
+                    
+                    // Check for embedded word tags <mm:ss.xx>
+                    let contentNS = content as NSString
+                    let wordMatches = wordTagRegex?.matches(in: content, range: NSRange(location: 0, length: contentNS.length)) ?? []
+                    
+                    if !wordMatches.isEmpty {
+                        var prevWordTime: TimeInterval = totalTime
+                        var cleanText = ""
+                        for wMatch in wordMatches {
+                            let wMin = Double(contentNS.substring(with: wMatch.range(at: 1))) ?? 0
+                            let wSec = Double(contentNS.substring(with: wMatch.range(at: 2))) ?? 0
+                            let wMs = Double(contentNS.substring(with: wMatch.range(at: 3))) ?? 0
+                            let wText = contentNS.substring(with: wMatch.range(at: 4)).trimmingCharacters(in: .whitespaces)
+                            let wTime = (wMin * 60.0) + wSec + (wMs / 100.0)
+                            
+                            cleanText += (cleanText.isEmpty ? "" : " ") + wText
+                            parsedWords.append(LyricWord(text: wText, startTime: prevWordTime, endTime: max(prevWordTime + 0.3, wTime)))
+                            prevWordTime = wTime
+                        }
+                        rawLines.append((time: totalTime, text: cleanText, words: parsedWords))
+                    } else {
+                        // Standard LRC line
+                        rawLines.append((time: totalTime, text: content, words: []))
+                    }
                 }
             }
         }
@@ -322,13 +383,14 @@ public final class LyricsEngine {
         for i in 0..<rawLines.count {
             let start = rawLines[i].time
             let text = rawLines[i].text
+            let words = rawLines[i].words
             let end: TimeInterval
             if i + 1 < rawLines.count {
                 end = max(start + 0.5, rawLines[i + 1].time)
             } else {
                 end = duration > start ? duration : start + 6.0
             }
-            result.append(LyricLine(startTime: start, endTime: end, text: text))
+            result.append(LyricLine(startTime: start, endTime: end, text: text, words: words))
         }
         
         return result
@@ -341,7 +403,6 @@ public final class LyricsEngine {
         for line in plain.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
-            // Filter section markers like [Chorus], (Scene 2), Verse 1:
             if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") { continue }
             if trimmed.hasPrefix("(") && trimmed.hasSuffix(")") && trimmed.count < 15 { continue }
             if trimmed.lowercased().hasPrefix("verse") || trimmed.lowercased().hasPrefix("chorus") { continue }
