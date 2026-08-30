@@ -70,9 +70,9 @@ public final class ThemeManager {
     
     private func makeDarkColors() -> ComputedColors {
         return ComputedColors(
-            cardBackground: NSColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 0.28), // 72% transparent black tint
+            cardBackground: NSColor(red: 0.05, green: 0.06, blue: 0.09, alpha: 0.65), // Translucent black pill
             border: NSColor(white: 1.0, alpha: 0.22),
-            activeText: NSColor(white: 1.0, alpha: 1.0), // Crisp solid white
+            activeText: NSColor(white: 1.0, alpha: 1.0), // Pure solid white text
             sungText: NSColor(white: 1.0, alpha: 0.94),
             upcomingText: NSColor(white: 1.0, alpha: 0.44),
             glowColor: NSColor(white: 1.0, alpha: 0.30),
@@ -83,11 +83,11 @@ public final class ThemeManager {
     
     private func makeLightColors() -> ComputedColors {
         return ComputedColors(
-            cardBackground: NSColor(white: 1.0, alpha: 0.32), // 68% transparent white tint
-            border: NSColor(white: 0.0, alpha: 0.18),
-            activeText: NSColor(white: 0.06, alpha: 1.0), // Crisp solid black/charcoal
-            sungText: NSColor(white: 0.14, alpha: 0.94),
-            upcomingText: NSColor(white: 0.25, alpha: 0.48),
+            cardBackground: NSColor(red: 0.96, green: 0.97, blue: 0.99, alpha: 0.82), // Crisp white pill
+            border: NSColor(white: 0.0, alpha: 0.22),
+            activeText: NSColor(white: 0.04, alpha: 1.0), // Pure solid black text (#0a0a0c)
+            sungText: NSColor(white: 0.12, alpha: 0.94),
+            upcomingText: NSColor(white: 0.24, alpha: 0.52),
             glowColor: NSColor(white: 0.0, alpha: 0.15),
             fullscreenBackground: NSColor(white: 0.97, alpha: 0.98),
             isDark: false
@@ -98,13 +98,13 @@ public final class ThemeManager {
         var hue: CGFloat = 0, sat: CGFloat = 0, bri: CGFloat = 0, a: CGFloat = 0
         albumAccentColor.usingColorSpace(.sRGB)?.getHue(&hue, saturation: &sat, brightness: &bri, alpha: &a)
         
-        let ambientTint = NSColor(hue: hue, saturation: max(0.40, sat * 0.8), brightness: 0.16, alpha: 0.26)
+        let ambientTint = NSColor(hue: hue, saturation: max(0.40, sat * 0.8), brightness: 0.20, alpha: 0.65)
         let ambientFS = NSColor(hue: hue, saturation: max(0.50, sat), brightness: 0.06, alpha: 0.98)
         let subtleGlow = albumAccentColor.withAlphaComponent(0.45)
         
         return ComputedColors(
             cardBackground: ambientTint,
-            border: albumAccentColor.withAlphaComponent(0.38),
+            border: albumAccentColor.withAlphaComponent(0.40),
             activeText: NSColor.white,
             sungText: NSColor(white: 1.0, alpha: 0.94),
             upcomingText: NSColor(white: 0.90, alpha: 0.44),
