@@ -156,13 +156,10 @@ public final class SpotifyTracker {
     }
     
     public func pollState() {
-        let requestStart = CACurrentMediaTime()
-        
         syncQueue.async { [weak self] in
             guard let self = self, let script = self.compiledAppleScript else { return }
             var errorInfo: NSDictionary?
             let result = script.executeAndReturnError(&errorInfo)
-            let roundtrip = CACurrentMediaTime() - requestStart
             guard errorInfo == nil else { return }
             
             if result.stringValue == "not_running" {
@@ -196,7 +193,6 @@ public final class SpotifyTracker {
             }
             
             let rawPos = Double(posStr) ?? 0.0
-            let estimatedLivePos = rawPos + (roundtrip / 2.0)
             
             var dur = Double(durStr) ?? 0.0
             if dur > 1000 { dur = dur / 1000.0 }
@@ -207,11 +203,11 @@ public final class SpotifyTracker {
                 
                 let predictedPos = self.anchorPosition + (CACurrentMediaTime() - self.anchorHostTime)
                 
-                // ONLY adjust anchor on major seek divergence (>0.9s) or state toggle
-                if abs(predictedPos - estimatedLivePos) > 0.90 || stateChanged {
-                    self.anchorPosition = estimatedLivePos
+                // Only re-anchor if there is a significant seek divergence (>1.0s) or track change
+                if abs(predictedPos - rawPos) > 1.0 || stateChanged {
+                    self.anchorPosition = rawPos
                     self.anchorHostTime = CACurrentMediaTime()
-                    self.currentPosition = estimatedLivePos
+                    self.currentPosition = rawPos
                 }
                 
                 let isNew = self.currentTrack == nil || self.currentTrack?.id != trackID || self.currentTrack?.title != name

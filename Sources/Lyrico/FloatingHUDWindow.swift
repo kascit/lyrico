@@ -92,7 +92,7 @@ public final class FloatingHUDWindow: NSPanel {
 }
 
 public final class FloatingHUDView: NSView {
-    private let visualEffectView: NSVisualEffectView
+    private let cardView: NSView
     private let activeLabel: NSTextField
     private let upcomingLabel: NSTextField
     
@@ -109,7 +109,7 @@ public final class FloatingHUDView: NSView {
     private var lastPlaybackPos: TimeInterval = 0.0
     
     public override init(frame frameRect: NSRect) {
-        self.visualEffectView = NSVisualEffectView(frame: .zero)
+        self.cardView = NSView(frame: .zero)
         self.activeLabel = NSTextField(labelWithString: "Lyrico")
         self.upcomingLabel = NSTextField(labelWithString: "")
         
@@ -130,38 +130,46 @@ public final class FloatingHUDView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     
     private func setupUI() {
-        // True Crystal-Clear Frosted Glass (behindWindow blur)
-        visualEffectView.material = .hudWindow
-        visualEffectView.blendingMode = .behindWindow
-        visualEffectView.state = .active
-        visualEffectView.wantsLayer = true
-        visualEffectView.layer?.cornerRadius = 18.0
-        visualEffectView.layer?.masksToBounds = true
-        visualEffectView.layer?.borderWidth = 1.0
-        visualEffectView.layer?.shadowColor = NSColor.black.cgColor
-        visualEffectView.layer?.shadowOpacity = 0.20
-        visualEffectView.layer?.shadowOffset = CGSize(width: 0, height: -4)
-        visualEffectView.layer?.shadowRadius = 12.0
-        addSubview(visualEffectView)
+        // True Translucent See-Through Glass Card (no opaque blur)
+        cardView.wantsLayer = true
+        cardView.layer?.cornerRadius = 18.0
+        cardView.layer?.masksToBounds = true
+        cardView.layer?.borderWidth = 1.0
+        cardView.layer?.shadowColor = NSColor.black.cgColor
+        cardView.layer?.shadowOpacity = 0.25
+        cardView.layer?.shadowOffset = CGSize(width: 0, height: -4)
+        cardView.layer?.shadowRadius = 14.0
+        addSubview(cardView)
         
         // Active Line (Top Slot)
         activeLabel.font = NSFont.systemFont(ofSize: 22, weight: .bold)
         activeLabel.alignment = .center
         activeLabel.lineBreakMode = .byTruncatingTail
         activeLabel.maximumNumberOfLines = 1
+        activeLabel.isBezeled = false
+        activeLabel.isEditable = false
+        activeLabel.drawsBackground = false
         activeLabel.wantsLayer = true
-        visualEffectView.addSubview(activeLabel)
+        cardView.addSubview(activeLabel)
         
         // Upcoming Line (Bottom Slot)
         upcomingLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
         upcomingLabel.alignment = .center
         upcomingLabel.lineBreakMode = .byTruncatingTail
         upcomingLabel.maximumNumberOfLines = 1
+        upcomingLabel.isBezeled = false
+        upcomingLabel.isEditable = false
+        upcomingLabel.drawsBackground = false
         upcomingLabel.wantsLayer = true
-        visualEffectView.addSubview(upcomingLabel)
+        cardView.addSubview(upcomingLabel)
         
         updateLayout()
         applyTheme()
+    }
+    
+    public override func layout() {
+        super.layout()
+        updateLayout()
     }
     
     public override func resizeSubviews(withOldSize oldSize: NSSize) {
@@ -178,24 +186,22 @@ public final class FloatingHUDView: NSView {
         let cardX = (b.width - cardWidth) / 2
         let cardY = (b.height - cardHeight) / 2
         
-        visualEffectView.frame = NSRect(x: cardX, y: cardY, width: cardWidth, height: cardHeight)
+        cardView.frame = NSRect(x: cardX, y: cardY, width: cardWidth, height: cardHeight)
         
         if style == .dual {
-            // Active Line at top, Upcoming Line at bottom
-            activeLabel.frame = NSRect(x: 24, y: cardHeight - 40, width: cardWidth - 48, height: 28)
+            activeLabel.frame = NSRect(x: 20, y: cardHeight - 38, width: cardWidth - 40, height: 28)
             upcomingLabel.isHidden = false
-            upcomingLabel.frame = NSRect(x: 24, y: 8, width: cardWidth - 48, height: 18)
+            upcomingLabel.frame = NSRect(x: 20, y: 8, width: cardWidth - 40, height: 18)
         } else {
-            activeLabel.frame = NSRect(x: 24, y: (cardHeight - 28) / 2, width: cardWidth - 48, height: 28)
+            activeLabel.frame = NSRect(x: 20, y: (cardHeight - 28) / 2, width: cardWidth - 40, height: 28)
             upcomingLabel.isHidden = true
         }
     }
     
     public func applyTheme() {
         let colors = ThemeManager.shared.resolveColors()
-        visualEffectView.material = colors.material
-        visualEffectView.layer?.backgroundColor = colors.tintColor.cgColor
-        visualEffectView.layer?.borderColor = colors.border.cgColor
+        cardView.layer?.backgroundColor = colors.cardBackground.cgColor
+        cardView.layer?.borderColor = colors.border.cgColor
         upcomingLabel.textColor = colors.upcomingText
         
         if let line = lastLyricLine {
@@ -211,12 +217,12 @@ public final class FloatingHUDView: NSView {
         let isNewLine = line.text != lastLineText
         
         if isNewLine && !line.text.isEmpty {
-            // Logical upward scroll: previous line slides UP and out, new line slides UP from below
+            // Logical upward scroll animation: old line moves UP, new line arrives from below
             let pushUpTransition = CATransition()
             pushUpTransition.duration = 0.26
             pushUpTransition.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             pushUpTransition.type = .push
-            pushUpTransition.subtype = .fromBottom // Enters from bottom, exits towards top
+            pushUpTransition.subtype = .fromBottom
             activeLabel.layer?.add(pushUpTransition, forKey: "lyricsScrollUp")
         }
         
@@ -240,7 +246,7 @@ public final class FloatingHUDView: NSView {
         let subtleGlow = NSShadow()
         subtleGlow.shadowColor = colors.glowColor
         subtleGlow.shadowOffset = .zero
-        subtleGlow.shadowBlurRadius = 8.0 // Crisp, professional subtle glow
+        subtleGlow.shadowBlurRadius = 8.0
         
         for (i, word) in line.words.enumerated() {
             let isCurrentWord = (currentPosition >= word.startTime && currentPosition < word.endTime)

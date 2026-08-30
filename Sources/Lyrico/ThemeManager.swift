@@ -8,8 +8,7 @@ public enum AppThemeMode: String, Codable, CaseIterable {
 }
 
 public struct ComputedColors {
-    public let material: NSVisualEffectView.Material
-    public let tintColor: NSColor
+    public let cardBackground: NSColor
     public let border: NSColor
     public let activeText: NSColor
     public let sungText: NSColor
@@ -41,6 +40,9 @@ public final class ThemeManager {
     }
     
     public var isSystemDark: Bool {
+        if let style = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") {
+            return style == "Dark"
+        }
         let appearance = NSApp.effectiveAppearance
         return appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
@@ -68,26 +70,24 @@ public final class ThemeManager {
     
     private func makeDarkColors() -> ComputedColors {
         return ComputedColors(
-            material: .hudWindow,
-            tintColor: NSColor(red: 0.05, green: 0.06, blue: 0.09, alpha: 0.35), // Translucent dark glass
-            border: NSColor(white: 1.0, alpha: 0.15),
-            activeText: NSColor.white,
+            cardBackground: NSColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 0.28), // 72% transparent black tint
+            border: NSColor(white: 1.0, alpha: 0.22),
+            activeText: NSColor(white: 1.0, alpha: 1.0), // Crisp solid white
             sungText: NSColor(white: 1.0, alpha: 0.94),
-            upcomingText: NSColor(white: 1.0, alpha: 0.42),
-            glowColor: NSColor(white: 1.0, alpha: 0.28),
-            fullscreenBackground: NSColor(red: 0.05, green: 0.05, blue: 0.07, alpha: 0.98),
+            upcomingText: NSColor(white: 1.0, alpha: 0.44),
+            glowColor: NSColor(white: 1.0, alpha: 0.30),
+            fullscreenBackground: NSColor(red: 0.04, green: 0.04, blue: 0.06, alpha: 0.98),
             isDark: true
         )
     }
     
     private func makeLightColors() -> ComputedColors {
         return ComputedColors(
-            material: .hudWindow,
-            tintColor: NSColor(white: 0.96, alpha: 0.50), // Translucent milky glass
-            border: NSColor(white: 0.0, alpha: 0.15),
-            activeText: NSColor(white: 0.08, alpha: 1.0), // Deep solid charcoal
-            sungText: NSColor(white: 0.18, alpha: 0.92),
-            upcomingText: NSColor(white: 0.35, alpha: 0.50),
+            cardBackground: NSColor(white: 1.0, alpha: 0.32), // 68% transparent white tint
+            border: NSColor(white: 0.0, alpha: 0.18),
+            activeText: NSColor(white: 0.06, alpha: 1.0), // Crisp solid black/charcoal
+            sungText: NSColor(white: 0.14, alpha: 0.94),
+            upcomingText: NSColor(white: 0.25, alpha: 0.48),
             glowColor: NSColor(white: 0.0, alpha: 0.15),
             fullscreenBackground: NSColor(white: 0.97, alpha: 0.98),
             isDark: false
@@ -98,14 +98,13 @@ public final class ThemeManager {
         var hue: CGFloat = 0, sat: CGFloat = 0, bri: CGFloat = 0, a: CGFloat = 0
         albumAccentColor.usingColorSpace(.sRGB)?.getHue(&hue, saturation: &sat, brightness: &bri, alpha: &a)
         
-        let ambientTint = NSColor(hue: hue, saturation: max(0.40, sat * 0.8), brightness: 0.20, alpha: 0.35)
+        let ambientTint = NSColor(hue: hue, saturation: max(0.40, sat * 0.8), brightness: 0.16, alpha: 0.26)
         let ambientFS = NSColor(hue: hue, saturation: max(0.50, sat), brightness: 0.06, alpha: 0.98)
         let subtleGlow = albumAccentColor.withAlphaComponent(0.45)
         
         return ComputedColors(
-            material: .hudWindow,
-            tintColor: ambientTint,
-            border: albumAccentColor.withAlphaComponent(0.35),
+            cardBackground: ambientTint,
+            border: albumAccentColor.withAlphaComponent(0.38),
             activeText: NSColor.white,
             sungText: NSColor(white: 1.0, alpha: 0.94),
             upcomingText: NSColor(white: 0.90, alpha: 0.44),
