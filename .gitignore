@@ -1,0 +1,9 @@
+.DS_Store
+/.build/
+/Packages/
+Package.pins
+Package.resolved
+*.xcodeproj
+*.xcworkspace
+.swiftpm/
+bin/
