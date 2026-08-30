@@ -1,75 +1,61 @@
 # Lyrico
 
-A high-performance, native macOS floating and fullscreen lyrics engine engineered specifically for **Spotify** and the **AeroSpace** tiling window manager.
+A lightweight, native macOS lyrics engine designed for **Spotify** and the **AeroSpace** tiling window manager.
 
-![macOS](https://img.shields.io/badge/platform-macOS%2013%2B-blue)
-![Swift](https://img.shields.io/badge/language-Swift%205.9-orange)
+![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-blue)
+![Language](https://img.shields.io/badge/language-Swift%205.9-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
-## Highlights
+## Features
 
-- **Multi-Source Lyrics Engine (100% Coverage)**:
-  - **Tier 1 (LRCLIB)**: Synced word-by-word and line-by-line LRC timestamps.
-  - **Tier 2 (Kugou Cloud)**: Massive secondary synced database.
-  - **Tier 3 (Smart Duration Interpolation)**: Character-weighted duration auto-alignment for plain text songs.
-- **Word-Level Karaoke Synchronization**:
-  - Sweeps across words in real time with high-precision (60Hz) playback interpolation.
-  - Word glowing aura matching the live album artwork tint.
-- **Modern Squircle Glass HUD**:
-  - Soft squircle rounded-rectangle card (`cornerRadius: 18.0`) with ultra-translucent frosted glass (`0.18` background alpha).
-  - Background code/browser text is crystal-clear visible.
-  - 100% click-through (`ignoresMouseEvents = true`).
-- **Immersive Fullscreen Lyrics Canvas**:
-  - Expands to take over the entire display with large typography (38pt bold active line, scrolling context).
-  - Press `Esc` or `⌥ ⇧ F` to toggle.
-- **Dynamic Color Modes**:
-  - **System (Default)**: Automatically follows macOS Light / Dark mode.
-  - **Dark Mode**: Deep obsidian backdrop with pure white glowing typography.
-  - **Light Mode**: Pure crisp white backdrop with deep charcoal typography.
-  - **Ambient Mode**: Dynamic gradient tinted with Spotify's live album cover.
-- **Zero-Script Multi-Space Floating**:
-  - Floats natively across all AeroSpace workspaces (`⌥ Q`, `⌥ W`, `⌥ C`, `⌥ D`, `⌥ G`) via macOS `NSWindow.CollectionBehavior.canJoinAllSpaces`.
+- **Multi-Source Synced Lyrics**: Fetches millisecond-synced lyrics with duration validation from **LRCLIB**, **NetEase CloudSearch**, and **Kugou**, with intelligent fallback timing for plain lyrics.
+- **True Translucent HUD**: Layer-backed see-through glass card (0 opaque blur materials) keeping background apps and tabs 100% visible and readable.
+- **Hardware Audio Sync**: Driven by Spotify CoreAudio notifications and monotonic time (`CACurrentMediaTime()`) for zero sampling latency and zero jitter.
+- **Cinematic Fullscreen Canvas**: 52pt bold active lyrics view with generous spacing. Dismiss with `Esc` or click anywhere.
+- **Dark & Light Themes**: Translucent black pill with pure white text in Dark mode, translucent white pill with deep black text in Light mode. Auto-follows macOS system appearance with manual toggle override.
+- **Multi-Space Native**: Floats across all AeroSpace workspaces via AppKit `.canJoinAllSpaces`.
 
 ---
 
-## Keyboard Shortcuts (AeroSpace)
+## Keybindings (AeroSpace)
 
-| Keybinding | Action |
+| Shortcut | Action |
 | :--- | :--- |
-| `⌥ .` (`Option + Period`) | **Toggle Floating HUD Show / Hide** |
-| `⌥ ⇧ .` (`Option + Shift + Period`) | **Toggle Position (Centered Top ⇄ Centered Bottom)** |
-| `⌥ ⌃ .` (`Option + Ctrl + Period`) | **Toggle Style (Single-Line ⇄ Dynamic 2-Line HUD)** |
-| `⌥ ⇧ F` (`Option + Shift + F`) | **Toggle Immersive Fullscreen Lyrics** |
-| `⌥ ⌃ T` (`Option + Ctrl + T`) | **Cycle Theme (Auto / Dark / Light / Ambient)** |
-| `⌥ ⇧ /` | **AeroSpace Cheatsheet HUD** |
+| `⌥ .` | **Toggle Floating HUD Show / Hide** |
+| `⌥ ⇧ .` | **Switch Position (Top ⇄ Bottom)** |
+| `⌥ ⌃ .` | **Switch Style (Single ⇄ Dual Line)** |
+| `⌥ ⌃ F` | **Toggle Fullscreen Lyrics Canvas** (or `Esc`) |
+| `⌥ ⌃ T` | **Toggle Theme (Dark ⇄ Light)** |
+| `⌥ [` / `⌥ ]` | **Micro-Calibrate Sync (Earlier / Later by 0.3s)** |
+| `⌥ \` | **Reset Sync Calibration (0.0s)** |
+| `⌥ ⇧ /` | **Toggle AeroSpace Cheatsheet HUD** |
 
 ---
 
-## CLI Usage
+## CLI Commands
 
 ```bash
-lyrico daemon               # Run background daemon
+lyrico daemon               # Run daemon
 lyrico toggle-visibility    # Toggle HUD show / hide
-lyrico toggle-position      # Switch between Top and Bottom
-lyrico toggle-style         # Switch between Single and Dual line
-lyrico toggle-fullscreen    # Toggle Fullscreen Lyrics Canvas
-lyrico cycle-theme          # Cycle System -> Dark -> Light -> Ambient
-lyrico set-theme <mode>     # Set specific theme (system | dark | light | ambient)
-lyrico status               # Query playback, lyrics, and display state
-lyrico stop                 # Gracefully terminate daemon
+lyrico toggle-position      # Switch Top / Bottom
+lyrico toggle-style         # Switch Single / Dual line
+lyrico toggle-fullscreen    # Toggle Fullscreen canvas
+lyrico toggle-theme         # Toggle Dark <-> Light
+lyrico set-theme <dark|light>
+lyrico offset-earlier       # -0.3s calibration
+lyrico offset-later         # +0.3s calibration
+lyrico offset-reset         # 0.0s reset
+lyrico status               # Query current state
+lyrico stop                 # Terminate daemon
 ```
 
 ---
 
-## Installation & Build
+## Build & Install
 
 ```bash
-# Clone repository
-git clone https://github.com/<your-username>/lyrico.git
-cd lyrico
-
 # Build release binary
 make release
 
@@ -79,6 +65,10 @@ make install
 
 ---
 
+## Note
+
+This project was built with AI-assisted pair programming using Antigravity (Google DeepMind).
+
 ## License
 
-MIT License.
+MIT License. See [LICENSE](LICENSE) for details.
