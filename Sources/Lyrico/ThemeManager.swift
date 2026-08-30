@@ -50,21 +50,21 @@ public final class ThemeManager {
         case .system, .dark:
             if dark {
                 return ComputedColors(
-                    background: NSColor(red: 0.05, green: 0.06, blue: 0.09, alpha: 0.18),
+                    background: NSColor(white: 0.0, alpha: 0.06), // Ultra-translucent airy glass
                     border: NSColor(white: 1.0, alpha: 0.12),
                     activeText: NSColor.white,
-                    sungText: NSColor(white: 1.0, alpha: 0.92),
-                    upcomingText: NSColor(white: 0.88, alpha: 0.40),
-                    glowColor: albumAccentColor.withAlphaComponent(0.45),
-                    fullscreenBackground: NSColor(red: 0.04, green: 0.04, blue: 0.06, alpha: 0.95)
+                    sungText: NSColor(white: 1.0, alpha: 0.94),
+                    upcomingText: NSColor(white: 0.90, alpha: 0.42),
+                    glowColor: albumAccentColor.withAlphaComponent(0.50),
+                    fullscreenBackground: NSColor(red: 0.03, green: 0.03, blue: 0.05, alpha: 0.95)
                 )
             } else {
                 return ComputedColors(
-                    background: NSColor(white: 0.98, alpha: 0.22),
+                    background: NSColor(white: 1.0, alpha: 0.08),
                     border: NSColor(white: 0.0, alpha: 0.10),
                     activeText: NSColor(white: 0.08, alpha: 1.0),
-                    sungText: NSColor(white: 0.15, alpha: 0.90),
-                    upcomingText: NSColor(white: 0.35, alpha: 0.45),
+                    sungText: NSColor(white: 0.15, alpha: 0.92),
+                    upcomingText: NSColor(white: 0.30, alpha: 0.45),
                     glowColor: albumAccentColor.withAlphaComponent(0.35),
                     fullscreenBackground: NSColor(white: 0.96, alpha: 0.96)
                 )
@@ -72,11 +72,11 @@ public final class ThemeManager {
             
         case .light:
             return ComputedColors(
-                background: NSColor(white: 0.98, alpha: 0.22),
+                background: NSColor(white: 1.0, alpha: 0.08),
                 border: NSColor(white: 0.0, alpha: 0.10),
                 activeText: NSColor(white: 0.08, alpha: 1.0),
-                sungText: NSColor(white: 0.15, alpha: 0.90),
-                upcomingText: NSColor(white: 0.35, alpha: 0.45),
+                sungText: NSColor(white: 0.15, alpha: 0.92),
+                upcomingText: NSColor(white: 0.30, alpha: 0.45),
                 glowColor: albumAccentColor.withAlphaComponent(0.35),
                 fullscreenBackground: NSColor(white: 0.96, alpha: 0.96)
             )
@@ -84,15 +84,15 @@ public final class ThemeManager {
         case .ambient:
             var hue: CGFloat = 0, sat: CGFloat = 0, bri: CGFloat = 0, a: CGFloat = 0
             albumAccentColor.usingColorSpace(.sRGB)?.getHue(&hue, saturation: &sat, brightness: &bri, alpha: &a)
-            let ambientBG = NSColor(hue: hue, saturation: max(0.4, sat), brightness: 0.12, alpha: 0.25)
+            let ambientBG = NSColor(hue: hue, saturation: max(0.4, sat), brightness: 0.15, alpha: 0.10)
             
             return ComputedColors(
                 background: ambientBG,
                 border: albumAccentColor.withAlphaComponent(0.25),
                 activeText: NSColor.white,
-                sungText: NSColor(white: 1.0, alpha: 0.92),
-                upcomingText: NSColor(white: 0.90, alpha: 0.42),
-                glowColor: albumAccentColor.withAlphaComponent(0.60),
+                sungText: NSColor(white: 1.0, alpha: 0.94),
+                upcomingText: NSColor(white: 0.92, alpha: 0.42),
+                glowColor: albumAccentColor.withAlphaComponent(0.65),
                 fullscreenBackground: NSColor(hue: hue, saturation: max(0.5, sat), brightness: 0.08, alpha: 0.96)
             )
         }

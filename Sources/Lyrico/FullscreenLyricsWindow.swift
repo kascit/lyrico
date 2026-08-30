@@ -204,7 +204,15 @@ public final class FullscreenLyricsView: NSView {
             return
         }
         
-        guard let activeIdx = lyrics.activeLineIndex(at: position) else { return }
+        let activeIdx = lyrics.activeLineIndex(at: position)
+        
+        if activeIdx == -1 {
+            activeLineLabel.stringValue = "♫"
+            prevLineLabel.stringValue = ""
+            nextLine1Label.stringValue = lyrics.lines.first?.text ?? ""
+            nextLine2Label.stringValue = (lyrics.lines.count > 1) ? lyrics.lines[1].text : ""
+            return
+        }
         
         if activeIdx != lastActiveIndex {
             lastActiveIndex = activeIdx

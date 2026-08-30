@@ -89,7 +89,13 @@ final class LyricoApp: NSObject, NSApplicationDelegate, SpotifyTrackerDelegate, 
     func spotifyTracker(_ tracker: SpotifyTracker, didTickPlayback position: TimeInterval) {
         guard let lyrics = currentLyrics, !lyrics.lines.isEmpty else { return }
         
-        if let activeIdx = lyrics.activeLineIndex(at: position) {
+        let activeIdx = lyrics.activeLineIndex(at: position)
+        
+        if activeIdx == -1 {
+            // Instrumental Intro before first line
+            let firstLineText = lyrics.lines.first?.text ?? ""
+            hudWindow.hudView.setStatic(active: "♫", upcoming: firstLineText)
+        } else {
             let activeLine = lyrics.lines[activeIdx]
             let upcomingText = (activeIdx + 1 < lyrics.lines.count) ? lyrics.lines[activeIdx + 1].text : ""
             hudWindow.hudView.renderKaraoke(line: activeLine, currentPosition: position, upcomingText: upcomingText)
@@ -143,6 +149,18 @@ final class LyricoApp: NSObject, NSApplicationDelegate, SpotifyTrackerDelegate, 
             fullscreenWindow.toggleFullscreen(animated: true)
             return fullscreenWindow.isShowingFullscreen ? "fullscreen" : "floating"
             
+        case "offset-earlier":
+            spotifyTracker.userOffset -= 0.3
+            return "offset: \(String(format: "%.1f", spotifyTracker.userOffset))s"
+            
+        case "offset-later":
+            spotifyTracker.userOffset += 0.3
+            return "offset: \(String(format: "%.1f", spotifyTracker.userOffset))s"
+            
+        case "offset-reset":
+            spotifyTracker.userOffset = 0.0
+            return "offset: 0.0s"
+            
         case "cycle-theme":
             let next = ThemeManager.shared.cycleMode()
             return "theme: \(next.rawValue)"
@@ -161,7 +179,8 @@ final class LyricoApp: NSObject, NSApplicationDelegate, SpotifyTrackerDelegate, 
             let style = hudWindow.hudView.style.rawValue
             let theme = ThemeManager.shared.currentMode.rawValue
             let isFull = fullscreenWindow.isShowingFullscreen ? "true" : "false"
-            return "State: \(state) | Track: \(track) - \(artist) | Pos: \(pos) | Style: \(style) | Theme: \(theme) | Fullscreen: \(isFull)"
+            let offset = String(format: "%.1f", spotifyTracker.userOffset)
+            return "State: \(state) | Track: \(track) - \(artist) | Pos: \(pos) | Style: \(style) | Theme: \(theme) | Offset: \(offset)s | Fullscreen: \(isFull)"
             
         case "stop", "quit", "exit":
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {

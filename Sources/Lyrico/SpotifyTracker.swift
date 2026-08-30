@@ -40,6 +40,8 @@ public final class SpotifyTracker {
     public private(set) var currentState: TrackPlaybackState = .unknown
     public private(set) var currentPosition: TimeInterval = 0.0
     
+    public var userOffset: TimeInterval = 0.0
+    
     private var anchorPosition: TimeInterval = 0.0
     private var anchorHostTime: CFTimeInterval = 0.0
     
@@ -128,14 +130,13 @@ public final class SpotifyTracker {
             }
             
             self.delegate?.spotifyTracker(self, didChangeState: state)
-            self.delegate?.spotifyTracker(self, didTickPlayback: position)
+            self.delegate?.spotifyTracker(self, didTickPlayback: position + self.userOffset)
             self.manageDisplayTimer(for: state)
         }
     }
     
     private func startTimers() {
-        // Periodic lightweight sync every 2.5 seconds to detect seeks
-        periodicSyncTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
+        periodicSyncTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
             self?.pollState()
         }
     }
@@ -146,20 +147,22 @@ public final class SpotifyTracker {
         
         guard state == .playing else { return }
         
-        // 60Hz ultra-fluid sub-pixel animation tick
         displayTimer = Timer.scheduledTimer(withTimeInterval: 0.016, repeats: true) { [weak self] _ in
             guard let self = self, self.currentState == .playing else { return }
             let elapsed = CACurrentMediaTime() - self.anchorHostTime
             self.currentPosition = self.anchorPosition + elapsed
-            self.delegate?.spotifyTracker(self, didTickPlayback: self.currentPosition)
+            self.delegate?.spotifyTracker(self, didTickPlayback: self.currentPosition + self.userOffset)
         }
     }
     
     public func pollState() {
+        let requestStart = CACurrentMediaTime()
+        
         syncQueue.async { [weak self] in
             guard let self = self, let script = self.compiledAppleScript else { return }
             var errorInfo: NSDictionary?
             let result = script.executeAndReturnError(&errorInfo)
+            let roundtrip = CACurrentMediaTime() - requestStart
             guard errorInfo == nil else { return }
             
             if result.stringValue == "not_running" {
@@ -192,7 +195,9 @@ public final class SpotifyTracker {
             default: state = .stopped
             }
             
-            let pos = Double(posStr) ?? 0.0
+            let rawPos = Double(posStr) ?? 0.0
+            let estimatedLivePos = rawPos + (roundtrip / 2.0)
+            
             var dur = Double(durStr) ?? 0.0
             if dur > 1000 { dur = dur / 1000.0 }
             
@@ -200,12 +205,13 @@ public final class SpotifyTracker {
                 let stateChanged = self.currentState != state
                 self.currentState = state
                 
-                // Drift compensation: if reported position drifted by > 0.4s (user seeked or skipped), update anchor
-                let calculated = self.anchorPosition + (CACurrentMediaTime() - self.anchorHostTime)
-                if abs(calculated - pos) > 0.40 || stateChanged {
-                    self.anchorPosition = pos
+                let predictedPos = self.anchorPosition + (CACurrentMediaTime() - self.anchorHostTime)
+                
+                // ONLY adjust anchor on major seek divergence (>0.9s) or state toggle
+                if abs(predictedPos - estimatedLivePos) > 0.90 || stateChanged {
+                    self.anchorPosition = estimatedLivePos
                     self.anchorHostTime = CACurrentMediaTime()
-                    self.currentPosition = pos
+                    self.currentPosition = estimatedLivePos
                 }
                 
                 let isNew = self.currentTrack == nil || self.currentTrack?.id != trackID || self.currentTrack?.title != name

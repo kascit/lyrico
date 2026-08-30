@@ -35,7 +35,7 @@ public struct LyricLine: Equatable, Codable {
         guard !rawWords.isEmpty else { return [] }
         
         let totalChars = rawWords.reduce(0) { $0 + max(1, $1.count) }
-        let duration = max(0.4, end - start)
+        let duration = max(0.3, end - start)
         var cursor = start
         var result: [LyricWord] = []
         
@@ -61,29 +61,30 @@ public struct ParsedLyrics: Equatable, Codable {
         self.source = source
     }
     
-    public func activeLineIndex(at position: TimeInterval) -> Int? {
-        guard !lines.isEmpty else { return nil }
+    public func activeLineIndex(at position: TimeInterval) -> Int {
+        guard !lines.isEmpty else { return -1 }
         
-        // Find line where position falls within its active duration
+        // Before first line starts
+        if position < lines[0].startTime {
+            return -1
+        }
+        
+        // Check active lines
         for (idx, line) in lines.enumerated() {
             if position >= line.startTime && position < line.endTime {
                 return idx
             }
         }
         
-        // If in gap between lines, stay on previous line until next line start
+        // In gap between lines: hold previous line until next starts
         for idx in 0..<(lines.count - 1) {
             if position >= lines[idx].endTime && position < lines[idx + 1].startTime {
                 return idx
             }
         }
         
-        // If after last line
-        if let last = lines.last, position >= last.startTime {
-            return lines.count - 1
-        }
-        
-        return nil
+        // After last line
+        return lines.count - 1
     }
 }
 
@@ -132,18 +133,21 @@ public final class LyricsEngine {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             
+            // 1. Try LRCLIB direct get
             if let lyrics = self.fetchFromLRCLIB(title: cleanTitle, artist: cleanArtist, album: album, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
                 return
             }
             
+            // 2. Try Kugou synced database
             if let lyrics = self.fetchFromKugou(title: cleanTitle, artist: cleanArtist, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
                 return
             }
             
+            // 3. Try LRCLIB plain text fallback
             if let lyrics = self.fetchPlainFromLRCLIB(title: cleanTitle, artist: cleanArtist, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
@@ -217,13 +221,18 @@ public final class LyricsEngine {
             guard let data = data, error == nil else { return }
             
             if let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                for item in list {
-                    if let synced = item["syncedLyrics"] as? String, !synced.isEmpty {
-                        let lines = self?.parseLRC(synced, duration: duration) ?? []
-                        if !lines.isEmpty {
-                            result = ParsedLyrics(lines: lines, isSynced: true, source: "LRCLIB Search")
-                            return
-                        }
+                // Find candidates with synced lyrics, prioritized by closest duration match
+                let syncedItems = list.filter { ($0["syncedLyrics"] as? String)?.isEmpty == false }
+                let sortedByDuration = syncedItems.sorted { item1, item2 in
+                    let d1 = (item1["duration"] as? Double) ?? 0
+                    let d2 = (item2["duration"] as? Double) ?? 0
+                    return abs(d1 - duration) < abs(d2 - duration)
+                }
+                
+                if let best = sortedByDuration.first, let synced = best["syncedLyrics"] as? String {
+                    let lines = self?.parseLRC(synced, duration: duration) ?? []
+                    if !lines.isEmpty {
+                        result = ParsedLyrics(lines: lines, isSynced: true, source: "LRCLIB Search")
                     }
                 }
             }
