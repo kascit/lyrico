@@ -33,17 +33,20 @@ public final class IPCServer {
             return false
         }
         
-        withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
-            let raw = UnsafeMutableRawPointer(ptr)
-            _ = pathBytes.withUnsafeBufferPointer { buf in
-                memcpy(raw, buf.baseAddress!, buf.count)
+        _ = pathBytes.withUnsafeBufferPointer { buf in
+            withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
+                memcpy(UnsafeMutableRawPointer(ptr), buf.baseAddress!, buf.count)
             }
         }
         
-        var rawAddr = sockaddr()
-        memcpy(&rawAddr, &addr, MemoryLayout<sockaddr_un>.size)
+        let sunLen = socklen_t(MemoryLayout<sockaddr_un>.size)
+        let bindRes = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
+                bind(self.serverSocket, sockPtr, sunLen)
+            }
+        }
         
-        guard bind(serverSocket, &rawAddr, socklen_t(MemoryLayout<sockaddr_un>.size)) >= 0 else {
+        guard bindRes >= 0 else {
             close(serverSocket)
             return false
         }
@@ -98,17 +101,20 @@ public final class IPCServer {
         addr.sun_family = sa_family_t(AF_UNIX)
         let pathBytes = IPCServer.socketPath.utf8CString
         
-        withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
-            let raw = UnsafeMutableRawPointer(ptr)
-            _ = pathBytes.withUnsafeBufferPointer { buf in
-                memcpy(raw, buf.baseAddress!, buf.count)
+        _ = pathBytes.withUnsafeBufferPointer { buf in
+            withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
+                memcpy(UnsafeMutableRawPointer(ptr), buf.baseAddress!, buf.count)
             }
         }
         
-        var rawAddr = sockaddr()
-        memcpy(&rawAddr, &addr, MemoryLayout<sockaddr_un>.size)
+        let sunLen = socklen_t(MemoryLayout<sockaddr_un>.size)
+        let connectRes = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
+                connect(sock, sockPtr, sunLen)
+            }
+        }
         
-        guard connect(sock, &rawAddr, socklen_t(MemoryLayout<sockaddr_un>.size)) >= 0 else {
+        guard connectRes >= 0 else {
             return nil
         }
         

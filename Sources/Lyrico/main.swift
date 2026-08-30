@@ -146,6 +146,13 @@ final class LyricoApp: NSObject, NSApplicationDelegate, SpotifyTrackerDelegate, 
             return next.rawValue
             
         case "toggle-fullscreen", "fullscreen":
+            if !fullscreenWindow.isShowingFullscreen {
+                if let track = spotifyTracker.currentTrack {
+                    fullscreenWindow.fullscreenView.updateTrackInfo(title: track.title, artist: track.artist)
+                }
+                fullscreenWindow.fullscreenView.updateLyrics(lyrics: currentLyrics)
+                fullscreenWindow.fullscreenView.tickPlayback(position: spotifyTracker.currentPosition + spotifyTracker.userOffset)
+            }
             fullscreenWindow.toggleFullscreen(animated: true)
             return fullscreenWindow.isShowingFullscreen ? "fullscreen" : "floating"
             
