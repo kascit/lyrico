@@ -8,7 +8,7 @@ public struct LyricoConfig: Codable {
     
     public static let `default` = LyricoConfig(
         position: "bottom",
-        theme: "system",
+        theme: "dark",
         style: "dual",
         userOffset: 0.0
     )

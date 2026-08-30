@@ -35,14 +35,20 @@ public struct LyricLine: Equatable, Codable {
         guard !rawWords.isEmpty else { return [] }
         
         let totalChars = rawWords.reduce(0) { $0 + max(1, $1.count) }
-        let duration = max(0.3, end - start)
+        let totalDuration = max(0.4, end - start)
+        
+        // Natural singing duration: human vocals average ~0.12 - 0.16s per character
+        // Never stretch words unnaturally across long instrumental gaps!
+        let naturalVocalDuration = max(1.2, min(Double(totalChars) * 0.15, totalDuration))
+        let vocalTime = min(totalDuration, naturalVocalDuration)
+        
         var cursor = start
         var result: [LyricWord] = []
         
         for word in rawWords {
             let ratio = Double(max(1, word.count)) / Double(totalChars)
-            let wordDuration = duration * ratio
-            let wordEnd = cursor + wordDuration
+            let wordDuration = max(0.20, vocalTime * ratio)
+            let wordEnd = min(cursor + wordDuration, end)
             result.append(LyricWord(text: word, startTime: cursor, endTime: wordEnd))
             cursor = wordEnd
         }
@@ -69,7 +75,7 @@ public struct ParsedLyrics: Equatable, Codable {
             return -1
         }
         
-        // Check active lines
+        // Check active line ranges
         for (idx, line) in lines.enumerated() {
             if position >= line.startTime && position < line.endTime {
                 return idx
@@ -83,7 +89,6 @@ public struct ParsedLyrics: Equatable, Codable {
             }
         }
         
-        // After last line
         return lines.count - 1
     }
 }
@@ -221,7 +226,6 @@ public final class LyricsEngine {
             guard let data = data, error == nil else { return }
             
             if let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                // Find candidates with synced lyrics, prioritized by closest duration match
                 let syncedItems = list.filter { ($0["syncedLyrics"] as? String)?.isEmpty == false }
                 let sortedByDuration = syncedItems.sorted { item1, item2 in
                     let d1 = (item1["duration"] as? Double) ?? 0
@@ -372,7 +376,7 @@ public final class LyricsEngine {
                             let wTime = (wMin * 60.0) + wSec + (wMs / 100.0)
                             
                             cleanText += (cleanText.isEmpty ? "" : " ") + wText
-                            parsedWords.append(LyricWord(text: wText, startTime: prevWordTime, endTime: max(prevWordTime + 0.3, wTime)))
+                            parsedWords.append(LyricWord(text: wText, startTime: prevWordTime, endTime: max(prevWordTime + 0.25, wTime)))
                             prevWordTime = wTime
                         }
                         rawLines.append((time: totalTime, text: cleanText, words: parsedWords))
@@ -395,7 +399,7 @@ public final class LyricsEngine {
             if i + 1 < rawLines.count {
                 end = max(start + 0.5, rawLines[i + 1].time)
             } else {
-                end = duration > start ? duration : start + 6.0
+                end = duration > start ? duration : start + 5.0
             }
             result.append(LyricLine(startTime: start, endTime: end, text: text, words: words))
         }

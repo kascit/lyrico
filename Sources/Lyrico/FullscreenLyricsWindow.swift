@@ -121,6 +121,7 @@ public final class FullscreenLyricsView: NSView {
         super.init(frame: frameRect)
         wantsLayer = true
         setupUI()
+        layoutSubviews()
     }
     
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -130,39 +131,71 @@ public final class FullscreenLyricsView: NSView {
         titleLabel.font = NSFont.systemFont(ofSize: 32, weight: .heavy)
         titleLabel.alignment = .center
         titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.maximumNumberOfLines = 1
+        titleLabel.isBezeled = false
+        titleLabel.isEditable = false
+        titleLabel.drawsBackground = false
         addSubview(titleLabel)
         
         artistLabel.font = NSFont.systemFont(ofSize: 20, weight: .medium)
         artistLabel.alignment = .center
         artistLabel.lineBreakMode = .byTruncatingTail
+        artistLabel.maximumNumberOfLines = 1
+        artistLabel.isBezeled = false
+        artistLabel.isEditable = false
+        artistLabel.drawsBackground = false
         addSubview(artistLabel)
         
         closeHintLabel.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         closeHintLabel.alignment = .center
+        closeHintLabel.isBezeled = false
+        closeHintLabel.isEditable = false
+        closeHintLabel.drawsBackground = false
         addSubview(closeHintLabel)
         
         // Lines
         prevLineLabel.font = NSFont.systemFont(ofSize: 24, weight: .medium)
         prevLineLabel.alignment = .center
         prevLineLabel.lineBreakMode = .byTruncatingTail
+        prevLineLabel.maximumNumberOfLines = 1
+        prevLineLabel.isBezeled = false
+        prevLineLabel.isEditable = false
+        prevLineLabel.drawsBackground = false
         addSubview(prevLineLabel)
         
         activeLineLabel.font = NSFont.systemFont(ofSize: 42, weight: .heavy)
         activeLineLabel.alignment = .center
         activeLineLabel.lineBreakMode = .byTruncatingTail
+        activeLineLabel.maximumNumberOfLines = 1
+        activeLineLabel.isBezeled = false
+        activeLineLabel.isEditable = false
+        activeLineLabel.drawsBackground = false
         addSubview(activeLineLabel)
         
         nextLine1Label.font = NSFont.systemFont(ofSize: 26, weight: .semibold)
         nextLine1Label.alignment = .center
         nextLine1Label.lineBreakMode = .byTruncatingTail
+        nextLine1Label.maximumNumberOfLines = 1
+        nextLine1Label.isBezeled = false
+        nextLine1Label.isEditable = false
+        nextLine1Label.drawsBackground = false
         addSubview(nextLine1Label)
         
         nextLine2Label.font = NSFont.systemFont(ofSize: 22, weight: .medium)
         nextLine2Label.alignment = .center
         nextLine2Label.lineBreakMode = .byTruncatingTail
+        nextLine2Label.maximumNumberOfLines = 1
+        nextLine2Label.isBezeled = false
+        nextLine2Label.isEditable = false
+        nextLine2Label.drawsBackground = false
         addSubview(nextLine2Label)
         
         applyTheme()
+    }
+    
+    public override func layout() {
+        super.layout()
+        layoutSubviews()
     }
     
     public override func resizeSubviews(withOldSize oldSize: NSSize) {
@@ -215,6 +248,9 @@ public final class FullscreenLyricsView: NSView {
     public func updateLyrics(lyrics: ParsedLyrics?) {
         self.currentLyrics = lyrics
         self.lastActiveIndex = -2
+        if lastPosition > 0 {
+            tickPlayback(position: lastPosition)
+        }
     }
     
     public func tickPlayback(position: TimeInterval) {
