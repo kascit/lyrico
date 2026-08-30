@@ -1,6 +1,6 @@
-# AeroGlow
+# Lyrico
 
-A high-performance, native macOS floating lyrics HUD engineered specifically for **Spotify** and the **AeroSpace** tiling window manager.
+A high-performance, native macOS floating and fullscreen lyrics engine engineered specifically for **Spotify** and the **AeroSpace** tiling window manager.
 
 ![macOS](https://img.shields.io/badge/platform-macOS%2013%2B-blue)
 ![Swift](https://img.shields.io/badge/language-Swift%205.9-orange)
@@ -10,19 +10,27 @@ A high-performance, native macOS floating lyrics HUD engineered specifically for
 
 ## Highlights
 
-- **Multi-Source Lyrics Engine**:
+- **Multi-Source Lyrics Engine (100% Coverage)**:
   - **Tier 1 (LRCLIB)**: Synced word-by-word and line-by-line LRC timestamps.
-  - **Tier 2 (Kugou Cloud)**: Massive global synced database fallback.
-  - **Tier 3 (Smart Duration Interpolation)**: Automatically aligns plain-text lyrics across track duration for indie tracks without official LRC timestamps (**100% lyric coverage**).
-- **Dynamic Ambient Island UI**:
-  - Frosted glass capsule with `NSVisualEffectView` HUD blur.
-  - Dynamic album accent color extraction from Spotify artwork.
-  - Active lyric line with glowing aura + upcoming line peek.
-  - Native click-through (`ignoresMouseEvents = true`) so clicks pass straight through into your code editor or browser.
-- **Native Multi-Space Floating**:
-  - Uses macOS `NSWindow.CollectionBehavior.canJoinAllSpaces` to float seamlessly over all AeroSpace workspaces with **zero move scripts, zero coordinate drift, and zero CPU bloat**.
-- **Instant Hotkey Response**:
-  - Sub-millisecond CLI/socket IPC server (`/tmp/aeroglow.sock`).
+  - **Tier 2 (Kugou Cloud)**: Massive secondary synced database.
+  - **Tier 3 (Smart Duration Interpolation)**: Character-weighted duration auto-alignment for plain text songs.
+- **Word-Level Karaoke Synchronization**:
+  - Sweeps across words in real time with high-precision (60Hz) playback interpolation.
+  - Word glowing aura matching the live album artwork tint.
+- **Modern Squircle Glass HUD**:
+  - Soft squircle rounded-rectangle card (`cornerRadius: 18.0`) with ultra-translucent frosted glass (`0.18` background alpha).
+  - Background code/browser text is crystal-clear visible.
+  - 100% click-through (`ignoresMouseEvents = true`).
+- **Immersive Fullscreen Lyrics Canvas**:
+  - Expands to take over the entire display with large typography (38pt bold active line, scrolling context).
+  - Press `Esc` or `⌥ ⇧ F` to toggle.
+- **Dynamic Color Modes**:
+  - **System (Default)**: Automatically follows macOS Light / Dark mode.
+  - **Dark Mode**: Deep obsidian backdrop with pure white glowing typography.
+  - **Light Mode**: Pure crisp white backdrop with deep charcoal typography.
+  - **Ambient Mode**: Dynamic gradient tinted with Spotify's live album cover.
+- **Zero-Script Multi-Space Floating**:
+  - Floats natively across all AeroSpace workspaces (`⌥ Q`, `⌥ W`, `⌥ C`, `⌥ D`, `⌥ G`) via macOS `NSWindow.CollectionBehavior.canJoinAllSpaces`.
 
 ---
 
@@ -30,56 +38,44 @@ A high-performance, native macOS floating lyrics HUD engineered specifically for
 
 | Keybinding | Action |
 | :--- | :--- |
-| `⌥ .` (`Option + Period`) | **Toggle Show / Hide** (smooth fade) |
+| `⌥ .` (`Option + Period`) | **Toggle Floating HUD Show / Hide** |
 | `⌥ ⇧ .` (`Option + Shift + Period`) | **Toggle Position (Centered Top ⇄ Centered Bottom)** |
-| `⌥ ⌃ .` (`Option + Ctrl + Period`) | **Toggle Style Mode (Single-Line ⇄ Dynamic 2-Line Island)** |
-
----
-
-## Installation & Build
-
-### Requirements
-- macOS 13.0 (Ventura) or later
-- Swift 5.9+ / Xcode Command Line Tools
-- Spotify for macOS
-
-### Building from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/<your-username>/aeroglow.git
-cd aeroglow
-
-# Build release binary
-make release
-
-# Install to ~/.config/aerospace/bin/aeroglow
-make install
-```
+| `⌥ ⌃ .` (`Option + Ctrl + Period`) | **Toggle Style (Single-Line ⇄ Dynamic 2-Line HUD)** |
+| `⌥ ⇧ F` (`Option + Shift + F`) | **Toggle Immersive Fullscreen Lyrics** |
+| `⌥ ⌃ T` (`Option + Ctrl + T`) | **Cycle Theme (Auto / Dark / Light / Ambient)** |
+| `⌥ ⇧ /` | **AeroSpace Cheatsheet HUD** |
 
 ---
 
 ## CLI Usage
 
 ```bash
-aeroglow daemon               # Run daemon in foreground
-aeroglow toggle-visibility    # Toggle show / hide
-aeroglow toggle-position      # Switch between top and bottom
-aeroglow toggle-style         # Switch between single-line and dual-line
-aeroglow status               # Print current playback & lyrics state
-aeroglow stop                 # Gracefully terminate daemon
+lyrico daemon               # Run background daemon
+lyrico toggle-visibility    # Toggle HUD show / hide
+lyrico toggle-position      # Switch between Top and Bottom
+lyrico toggle-style         # Switch between Single and Dual line
+lyrico toggle-fullscreen    # Toggle Fullscreen Lyrics Canvas
+lyrico cycle-theme          # Cycle System -> Dark -> Light -> Ambient
+lyrico set-theme <mode>     # Set specific theme (system | dark | light | ambient)
+lyrico status               # Query playback, lyrics, and display state
+lyrico stop                 # Gracefully terminate daemon
 ```
 
 ---
 
-## Architecture
+## Installation & Build
 
-- `SpotifyService.swift`: Event-driven `DistributedNotificationCenter` observer and high-precision playback position interpolator.
-- `LyricsEngine.swift`: Multi-tier LRC parser, remote API client, and smart timing interpolator with local disk caching.
-- `ColorExtractor.swift`: CoreImage dominant color analyzer for dynamic artwork tinting.
-- `FloatingCapsuleWindow.swift`: Borderless floating `NSPanel` with native multi-space behaviors and click-through mode.
-- `CapsuleContentView.swift`: Frosted glass capsule view with SF Pro typography, dynamic aura glow, and line transitions.
-- `IPCServer.swift`: UNIX domain socket server for sub-millisecond CLI and hotkey communication.
+```bash
+# Clone repository
+git clone https://github.com/<your-username>/lyrico.git
+cd lyrico
+
+# Build release binary
+make release
+
+# Install to ~/.config/aerospace/bin/lyrico
+make install
+```
 
 ---
 

@@ -5,7 +5,7 @@ public protocol IPCServerDelegate: AnyObject {
 }
 
 public final class IPCServer {
-    public static let socketPath = "/tmp/aeroglow.sock"
+    public static let socketPath = "/tmp/lyrico.sock"
     public weak var delegate: IPCServerDelegate?
     
     private var serverSource: DispatchSourceRead?
@@ -24,6 +24,7 @@ public final class IPCServer {
         guard serverSocket >= 0 else { return false }
         
         var addr = sockaddr_un()
+        addr.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
         addr.sun_family = sa_family_t(AF_UNIX)
         
         let pathBytes = IPCServer.socketPath.utf8CString
@@ -93,6 +94,7 @@ public final class IPCServer {
         defer { close(sock) }
         
         var addr = sockaddr_un()
+        addr.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
         addr.sun_family = sa_family_t(AF_UNIX)
         let pathBytes = IPCServer.socketPath.utf8CString
         

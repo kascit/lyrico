@@ -2,19 +2,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "AeroGlow",
+    name: "Lyrico",
     platforms: [
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "aeroglow", targets: ["AeroGlow"])
+        .executable(name: "lyrico", targets: ["Lyrico"])
     ],
     dependencies: [],
     targets: [
         .executableTarget(
-            name: "AeroGlow",
+            name: "Lyrico",
             dependencies: [],
-            path: "Sources/AeroGlow"
+            path: "Sources/Lyrico"
         )
     ]
 )

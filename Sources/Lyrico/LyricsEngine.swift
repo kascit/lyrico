@@ -64,13 +64,21 @@ public struct ParsedLyrics: Equatable, Codable {
     public func activeLineIndex(at position: TimeInterval) -> Int? {
         guard !lines.isEmpty else { return nil }
         
+        // Find line where position falls within its active duration
         for (idx, line) in lines.enumerated() {
-            if position >= line.startTime && position <= line.endTime {
+            if position >= line.startTime && position < line.endTime {
                 return idx
             }
         }
         
-        // If between last line start and end
+        // If in gap between lines, stay on previous line until next line start
+        for idx in 0..<(lines.count - 1) {
+            if position >= lines[idx].endTime && position < lines[idx + 1].startTime {
+                return idx
+            }
+        }
+        
+        // If after last line
         if let last = lines.last, position >= last.startTime {
             return lines.count - 1
         }
@@ -88,7 +96,7 @@ public final class LyricsEngine {
     
     public init() {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        self.cacheDirectory = home.appendingPathComponent(".cache/aeroglow/lyrics", isDirectory: true)
+        self.cacheDirectory = home.appendingPathComponent(".cache/lyrico/lyrics", isDirectory: true)
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         
         let config = URLSessionConfiguration.default
@@ -108,13 +116,11 @@ public final class LyricsEngine {
         let cleanArtist = sanitizeArtist(artist)
         let key = cacheKey(title: cleanTitle, artist: cleanArtist)
         
-        // 1. Check memory cache
         if let cached = memoryCache[key] {
             completion(cached)
             return
         }
         
-        // 2. Check disk cache
         let fileURL = cacheDirectory.appendingPathComponent("\(key).json")
         if let data = try? Data(contentsOf: fileURL),
            let cached = try? JSONDecoder().decode(ParsedLyrics.self, from: data) {
@@ -123,25 +129,21 @@ public final class LyricsEngine {
             return
         }
         
-        // 3. Fetch from remote sources concurrently with priority
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             
-            // Try LRCLIB first
             if let lyrics = self.fetchFromLRCLIB(title: cleanTitle, artist: cleanArtist, album: album, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
                 return
             }
             
-            // Try Kugou synced database second
             if let lyrics = self.fetchFromKugou(title: cleanTitle, artist: cleanArtist, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
                 return
             }
             
-            // Try LRCLIB plain text fallback with smart duration interpolation
             if let lyrics = self.fetchPlainFromLRCLIB(title: cleanTitle, artist: cleanArtist, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
@@ -173,7 +175,7 @@ public final class LyricsEngine {
         
         guard let url = comps?.url else { return nil }
         var request = URLRequest(url: url)
-        request.setValue("AeroGlow/1.0 (macOS; Native)", forHTTPHeaderField: "User-Agent")
+        request.setValue("Lyrico/1.0 (macOS; Native)", forHTTPHeaderField: "User-Agent")
         
         let semaphore = DispatchSemaphore(value: 0)
         var result: ParsedLyrics?
@@ -205,7 +207,7 @@ public final class LyricsEngine {
               let url = URL(string: "https://lrclib.net/api/search?q=\(encoded)") else { return nil }
         
         var request = URLRequest(url: url)
-        request.setValue("AeroGlow/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("Lyrico/1.0", forHTTPHeaderField: "User-Agent")
         
         let semaphore = DispatchSemaphore(value: 0)
         var result: ParsedLyrics?
@@ -236,7 +238,7 @@ public final class LyricsEngine {
               let url = URL(string: "https://lrclib.net/api/search?q=\(encoded)") else { return nil }
         
         var request = URLRequest(url: url)
-        request.setValue("AeroGlow/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("Lyrico/1.0", forHTTPHeaderField: "User-Agent")
         
         let semaphore = DispatchSemaphore(value: 0)
         var result: ParsedLyrics?
@@ -317,7 +319,7 @@ public final class LyricsEngine {
         return parsed
     }
     
-    // MARK: - Enhanced LRC Parser with Word-Level Parsing
+    // MARK: - Enhanced LRC Parser
     
     public func parseLRC(_ lrc: String, duration: TimeInterval) -> [LyricLine] {
         var rawLines: [(time: TimeInterval, text: String, words: [LyricWord])] = []
@@ -345,11 +347,8 @@ public final class LyricsEngine {
                 let msDivider = msStr.count == 2 ? 100.0 : 1000.0
                 let totalTime = (minutes * 60.0) + seconds + (fractions / msDivider)
                 
-                // Skip empty instrumental tags
                 if !content.isEmpty && !content.hasPrefix("//") {
                     var parsedWords: [LyricWord] = []
-                    
-                    // Check for embedded word tags <mm:ss.xx>
                     let contentNS = content as NSString
                     let wordMatches = wordTagRegex?.matches(in: content, range: NSRange(location: 0, length: contentNS.length)) ?? []
                     
@@ -369,7 +368,6 @@ public final class LyricsEngine {
                         }
                         rawLines.append((time: totalTime, text: cleanText, words: parsedWords))
                     } else {
-                        // Standard LRC line
                         rawLines.append((time: totalTime, text: content, words: []))
                     }
                 }
@@ -396,7 +394,7 @@ public final class LyricsEngine {
         return result
     }
     
-    // MARK: - Smart Duration Interpolator for Plain Lyrics
+    // MARK: - Smart Duration Interpolator
     
     public func interpolatePlainLyrics(_ plain: String, duration: TimeInterval) -> [LyricLine] {
         var rawLines: [String] = []

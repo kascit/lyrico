@@ -13,15 +13,15 @@ release:
 
 install: release
 	mkdir -p $(BINDIR)
-	cp .build/release/aeroglow $(BINDIR)/aeroglow
-	chmod +x $(BINDIR)/aeroglow
-	@echo "✅ Installed aeroglow to $(BINDIR)/aeroglow"
+	cp .build/release/lyrico $(BINDIR)/lyrico
+	chmod +x $(BINDIR)/lyrico
+	@echo "✅ Installed lyrico to $(BINDIR)/lyrico"
 
 uninstall:
-	rm -f $(BINDIR)/aeroglow
+	rm -f $(BINDIR)/lyrico
 
 run: release
-	./.build/release/aeroglow daemon
+	./.build/release/lyrico daemon
 
 clean:
 	swift package clean
