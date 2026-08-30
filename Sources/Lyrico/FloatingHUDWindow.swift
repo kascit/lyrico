@@ -16,7 +16,11 @@ public final class FloatingHUDWindow: NSPanel {
     public private(set) var currentPosition: HUDPosition = .bottom
     
     public init() {
-        let width: CGFloat = 880.0
+        let savedPosStr = ConfigManager.shared.config.position
+        let pos = HUDPosition(rawValue: savedPosStr) ?? .bottom
+        self.currentPosition = pos
+        
+        let width: CGFloat = 860.0
         let height: CGFloat = 100.0
         
         let screen = NSScreen.main ?? NSScreen.screens.first
@@ -46,17 +50,18 @@ public final class FloatingHUDWindow: NSPanel {
         self.hidesOnDeactivate = false
         
         self.contentView = hudView
-        updatePosition(to: .bottom, animated: false)
+        updatePosition(to: pos, animated: false)
     }
     
     public func updatePosition(to position: HUDPosition, animated: Bool = true) {
         self.currentPosition = position
+        ConfigManager.shared.updatePosition(position.rawValue)
         
         let screen = NSScreen.main ?? NSScreen.screens.first
         let screenFrame = screen?.frame ?? NSRect(x: 0, y: 0, width: 1512, height: 982)
         let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1512, height: 949)
         
-        let width: CGFloat = 880.0
+        let width: CGFloat = 860.0
         let height: CGFloat = 100.0
         let x = round((screenFrame.width - width) / 2)
         
@@ -71,7 +76,7 @@ public final class FloatingHUDWindow: NSPanel {
         
         if animated {
             NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.30
+                ctx.duration = 0.28
                 ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 self.animator().setFrame(targetRect, display: true)
             }
@@ -92,7 +97,10 @@ public final class FloatingHUDView: NSView {
     private let upcomingLabel: NSTextField
     
     public var style: HUDStyle = .dual {
-        didSet { updateLayout() }
+        didSet {
+            ConfigManager.shared.updateStyle(style.rawValue)
+            updateLayout()
+        }
     }
     
     private var lastLineText: String = ""
@@ -104,6 +112,9 @@ public final class FloatingHUDView: NSView {
         self.visualEffectView = NSVisualEffectView(frame: .zero)
         self.activeLabel = NSTextField(labelWithString: "Lyrico")
         self.upcomingLabel = NSTextField(labelWithString: "")
+        
+        let savedStyle = ConfigManager.shared.config.style
+        self.style = HUDStyle(rawValue: savedStyle) ?? .dual
         
         super.init(frame: frameRect)
         wantsLayer = true
@@ -119,32 +130,30 @@ public final class FloatingHUDView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     
     private func setupUI() {
-        // Modern Squircle Glass Card
+        // True Crystal-Clear Frosted Glass (behindWindow blur)
         visualEffectView.material = .hudWindow
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.state = .active
         visualEffectView.wantsLayer = true
         visualEffectView.layer?.cornerRadius = 18.0
         visualEffectView.layer?.masksToBounds = true
-        visualEffectView.layer?.borderWidth = 0.8
+        visualEffectView.layer?.borderWidth = 1.0
         visualEffectView.layer?.shadowColor = NSColor.black.cgColor
-        visualEffectView.layer?.shadowOpacity = 0.22
+        visualEffectView.layer?.shadowOpacity = 0.20
         visualEffectView.layer?.shadowOffset = CGSize(width: 0, height: -4)
-        visualEffectView.layer?.shadowRadius = 14.0
+        visualEffectView.layer?.shadowRadius = 12.0
         addSubview(visualEffectView)
         
-        // Active Line
+        // Active Line (Top Slot)
         activeLabel.font = NSFont.systemFont(ofSize: 22, weight: .bold)
-        activeLabel.textColor = .white
         activeLabel.alignment = .center
         activeLabel.lineBreakMode = .byTruncatingTail
         activeLabel.maximumNumberOfLines = 1
         activeLabel.wantsLayer = true
         visualEffectView.addSubview(activeLabel)
         
-        // Upcoming Line
+        // Upcoming Line (Bottom Slot)
         upcomingLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
-        upcomingLabel.textColor = NSColor(white: 0.88, alpha: 0.45)
         upcomingLabel.alignment = .center
         upcomingLabel.lineBreakMode = .byTruncatingTail
         upcomingLabel.maximumNumberOfLines = 1
@@ -165,30 +174,30 @@ public final class FloatingHUDView: NSView {
         guard b.width > 0 && b.height > 0 else { return }
         
         let cardHeight: CGFloat = style == .dual ? 68.0 : 48.0
-        let cardWidth = min(b.width - 24, 840.0)
+        let cardWidth = min(b.width - 20, 820.0)
         let cardX = (b.width - cardWidth) / 2
         let cardY = (b.height - cardHeight) / 2
         
         visualEffectView.frame = NSRect(x: cardX, y: cardY, width: cardWidth, height: cardHeight)
         
         if style == .dual {
-            activeLabel.frame = NSRect(x: 24, y: cardHeight - 42, width: cardWidth - 48, height: 30)
+            // Active Line at top, Upcoming Line at bottom
+            activeLabel.frame = NSRect(x: 24, y: cardHeight - 40, width: cardWidth - 48, height: 28)
             upcomingLabel.isHidden = false
             upcomingLabel.frame = NSRect(x: 24, y: 8, width: cardWidth - 48, height: 18)
         } else {
-            activeLabel.frame = NSRect(x: 24, y: (cardHeight - 30) / 2, width: cardWidth - 48, height: 30)
+            activeLabel.frame = NSRect(x: 24, y: (cardHeight - 28) / 2, width: cardWidth - 48, height: 28)
             upcomingLabel.isHidden = true
         }
     }
     
     public func applyTheme() {
         let colors = ThemeManager.shared.resolveColors()
-        visualEffectView.material = colors.isDark ? .hudWindow : .selection
-        visualEffectView.layer?.backgroundColor = colors.background.cgColor
+        visualEffectView.material = colors.material
+        visualEffectView.layer?.backgroundColor = colors.tintColor.cgColor
         visualEffectView.layer?.borderColor = colors.border.cgColor
         upcomingLabel.textColor = colors.upcomingText
         
-        // Instant active text repaint
         if let line = lastLyricLine {
             renderKaraoke(line: line, currentPosition: lastPlaybackPos, upcomingText: lastUpcomingText)
         } else if !lastLineText.isEmpty {
@@ -202,17 +211,23 @@ public final class FloatingHUDView: NSView {
         let isNewLine = line.text != lastLineText
         
         if isNewLine && !line.text.isEmpty {
-            let transition = CATransition()
-            transition.duration = 0.24
-            transition.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            transition.type = .push
-            transition.subtype = .fromTop
-            activeLabel.layer?.add(transition, forKey: "karaokeLinePush")
+            // Logical upward scroll: previous line slides UP and out, new line slides UP from below
+            let pushUpTransition = CATransition()
+            pushUpTransition.duration = 0.26
+            pushUpTransition.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            pushUpTransition.type = .push
+            pushUpTransition.subtype = .fromBottom // Enters from bottom, exits towards top
+            activeLabel.layer?.add(pushUpTransition, forKey: "lyricsScrollUp")
         }
         
         lastLineText = line.text
         
         if upcomingText != lastUpcomingText {
+            let fadeTransition = CATransition()
+            fadeTransition.duration = 0.22
+            fadeTransition.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            fadeTransition.type = .fade
+            upcomingLabel.layer?.add(fadeTransition, forKey: "upcomingFade")
             upcomingLabel.stringValue = upcomingText
             lastUpcomingText = upcomingText
         }
@@ -222,10 +237,10 @@ public final class FloatingHUDView: NSView {
         let paraStyle = NSMutableParagraphStyle()
         paraStyle.alignment = .center
         
-        let glowShadow = NSShadow()
-        glowShadow.shadowColor = colors.glowColor
-        glowShadow.shadowOffset = .zero
-        glowShadow.shadowBlurRadius = 14.0
+        let subtleGlow = NSShadow()
+        subtleGlow.shadowColor = colors.glowColor
+        subtleGlow.shadowOffset = .zero
+        subtleGlow.shadowBlurRadius = 8.0 // Crisp, professional subtle glow
         
         for (i, word) in line.words.enumerated() {
             let isCurrentWord = (currentPosition >= word.startTime && currentPosition < word.endTime)
@@ -238,7 +253,7 @@ public final class FloatingHUDView: NSView {
             if isCurrentWord {
                 attrs[.font] = NSFont.systemFont(ofSize: 22, weight: .heavy)
                 attrs[.foregroundColor] = colors.activeText
-                attrs[.shadow] = glowShadow
+                attrs[.shadow] = subtleGlow
             } else if isSungWord {
                 attrs[.font] = NSFont.systemFont(ofSize: 21, weight: .bold)
                 attrs[.foregroundColor] = colors.sungText
@@ -261,15 +276,9 @@ public final class FloatingHUDView: NSView {
         let paraStyle = NSMutableParagraphStyle()
         paraStyle.alignment = .center
         
-        let glowShadow = NSShadow()
-        glowShadow.shadowColor = colors.glowColor
-        glowShadow.shadowOffset = .zero
-        glowShadow.shadowBlurRadius = 12.0
-        
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 21, weight: .bold),
             .foregroundColor: colors.activeText,
-            .shadow: glowShadow,
             .paragraphStyle: paraStyle
         ]
         
