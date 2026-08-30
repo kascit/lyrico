@@ -97,6 +97,8 @@ public final class FloatingHUDView: NSView {
     
     private var lastLineText: String = ""
     private var lastUpcomingText: String = ""
+    private var lastLyricLine: LyricLine?
+    private var lastPlaybackPos: TimeInterval = 0.0
     
     public override init(frame frameRect: NSRect) {
         self.visualEffectView = NSVisualEffectView(frame: .zero)
@@ -108,14 +110,16 @@ public final class FloatingHUDView: NSView {
         setupUI()
         
         ThemeManager.shared.onThemeChange = { [weak self] in
-            self?.applyTheme()
+            DispatchQueue.main.async {
+                self?.applyTheme()
+            }
         }
     }
     
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     
     private func setupUI() {
-        // Modern Squircle Glass Card (not a pill, clean rounded rectangle)
+        // Modern Squircle Glass Card
         visualEffectView.material = .hudWindow
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.state = .active
@@ -179,12 +183,22 @@ public final class FloatingHUDView: NSView {
     
     public func applyTheme() {
         let colors = ThemeManager.shared.resolveColors()
+        visualEffectView.material = colors.isDark ? .hudWindow : .selection
         visualEffectView.layer?.backgroundColor = colors.background.cgColor
         visualEffectView.layer?.borderColor = colors.border.cgColor
         upcomingLabel.textColor = colors.upcomingText
+        
+        // Instant active text repaint
+        if let line = lastLyricLine {
+            renderKaraoke(line: line, currentPosition: lastPlaybackPos, upcomingText: lastUpcomingText)
+        } else if !lastLineText.isEmpty {
+            setStatic(active: lastLineText, upcoming: lastUpcomingText)
+        }
     }
     
     public func renderKaraoke(line: LyricLine, currentPosition: TimeInterval, upcomingText: String) {
+        lastLyricLine = line
+        lastPlaybackPos = currentPosition
         let isNewLine = line.text != lastLineText
         
         if isNewLine && !line.text.isEmpty {
