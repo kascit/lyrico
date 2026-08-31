@@ -285,9 +285,9 @@ public final class FloatingHUDView: NSView {
             finalUpcomingText = upcomingText
         } else {
             if upcomingText.isEmpty {
-                finalUpcomingText = "Unsynced • Use ⌥[ / ⌥] to calibrate"
+                finalUpcomingText = "(unsynced)"
             } else {
-                finalUpcomingText = "\(upcomingText)  •  [unsynced: ⌥[ ⌥]]"
+                finalUpcomingText = "\(upcomingText)  •  (unsynced)"
             }
         }
         

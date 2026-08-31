@@ -98,7 +98,7 @@ final class LyricoApp: NSObject, NSApplicationDelegate, SpotifyTrackerDelegate, 
         if activeIdx == -1 {
             // Instrumental Intro before first line
             let firstLineText = lyrics.lines.first?.text ?? ""
-            let introUpcoming = isSynced ? firstLineText : "\(firstLineText)  •  [unsynced: ⌥[ ⌥]]"
+            let introUpcoming = isSynced ? firstLineText : "\(firstLineText)  •  (unsynced)"
             hudWindow.hudView.setStatic(active: "♫", upcoming: introUpcoming)
         } else {
             let activeLine = lyrics.lines[activeIdx]
