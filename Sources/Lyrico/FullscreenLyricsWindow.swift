@@ -162,38 +162,38 @@ public final class FullscreenLyricsView: NSView {
         closeHintLabel.drawsBackground = false
         addSubview(closeHintLabel)
         
-        // Multi-Line Word Wrapping Typography for Fullscreen
-        prevLineLabel.font = NSFont.systemFont(ofSize: 26, weight: .medium)
+        // Massive Full-Width Typography for Fullscreen
+        prevLineLabel.font = NSFont.systemFont(ofSize: 28, weight: .medium)
         prevLineLabel.alignment = .center
-        prevLineLabel.lineBreakMode = .byWordWrapping
-        prevLineLabel.maximumNumberOfLines = 2
+        prevLineLabel.lineBreakMode = .byTruncatingTail
+        prevLineLabel.maximumNumberOfLines = 1
         prevLineLabel.isBezeled = false
         prevLineLabel.isEditable = false
         prevLineLabel.drawsBackground = false
         addSubview(prevLineLabel)
         
-        activeLineLabel.font = NSFont.systemFont(ofSize: 48, weight: .black)
+        activeLineLabel.font = NSFont.systemFont(ofSize: 52, weight: .black)
         activeLineLabel.alignment = .center
-        activeLineLabel.lineBreakMode = .byWordWrapping
-        activeLineLabel.maximumNumberOfLines = 3
+        activeLineLabel.lineBreakMode = .byTruncatingTail
+        activeLineLabel.maximumNumberOfLines = 1
         activeLineLabel.isBezeled = false
         activeLineLabel.isEditable = false
         activeLineLabel.drawsBackground = false
         addSubview(activeLineLabel)
         
-        nextLine1Label.font = NSFont.systemFont(ofSize: 32, weight: .semibold)
+        nextLine1Label.font = NSFont.systemFont(ofSize: 34, weight: .semibold)
         nextLine1Label.alignment = .center
-        nextLine1Label.lineBreakMode = .byWordWrapping
-        nextLine1Label.maximumNumberOfLines = 2
+        nextLine1Label.lineBreakMode = .byTruncatingTail
+        nextLine1Label.maximumNumberOfLines = 1
         nextLine1Label.isBezeled = false
         nextLine1Label.isEditable = false
         nextLine1Label.drawsBackground = false
         addSubview(nextLine1Label)
         
-        nextLine2Label.font = NSFont.systemFont(ofSize: 24, weight: .medium)
+        nextLine2Label.font = NSFont.systemFont(ofSize: 26, weight: .medium)
         nextLine2Label.alignment = .center
-        nextLine2Label.lineBreakMode = .byWordWrapping
-        nextLine2Label.maximumNumberOfLines = 2
+        nextLine2Label.lineBreakMode = .byTruncatingTail
+        nextLine2Label.maximumNumberOfLines = 1
         nextLine2Label.isBezeled = false
         nextLine2Label.isEditable = false
         nextLine2Label.drawsBackground = false
@@ -217,7 +217,7 @@ public final class FullscreenLyricsView: NSView {
         guard b.width > 0 && b.height > 0 else { return }
         
         let centerY = b.height / 2
-        let maxW = min(b.width - 80, 1260.0)
+        let maxW = min(b.width - 60, 1380.0)
         let leftX = (b.width - maxW) / 2
         
         // Header at top
@@ -225,11 +225,11 @@ public final class FullscreenLyricsView: NSView {
         artistLabel.frame = NSRect(x: leftX, y: b.height - 156, width: maxW, height: 30)
         closeHintLabel.frame = NSRect(x: leftX, y: 35, width: maxW, height: 22)
         
-        // Center lyrics column with generous vertical spacing and wrapping room
-        activeLineLabel.frame = NSRect(x: leftX, y: centerY - 55, width: maxW, height: 110)
-        prevLineLabel.frame = NSRect(x: leftX, y: centerY + 70, width: maxW, height: 60)
-        nextLine1Label.frame = NSRect(x: leftX, y: centerY - 135, width: maxW, height: 68)
-        nextLine2Label.frame = NSRect(x: leftX, y: centerY - 205, width: maxW, height: 56)
+        // Center lyrics column with massive wide typography
+        activeLineLabel.frame = NSRect(x: leftX, y: centerY - 40, width: maxW, height: 80)
+        prevLineLabel.frame = NSRect(x: leftX, y: centerY + 65, width: maxW, height: 50)
+        nextLine1Label.frame = NSRect(x: leftX, y: centerY - 115, width: maxW, height: 56)
+        nextLine2Label.frame = NSRect(x: leftX, y: centerY - 180, width: maxW, height: 46)
     }
     
     public func applyTheme() {
@@ -262,25 +262,28 @@ public final class FullscreenLyricsView: NSView {
         }
     }
     
-    private func fontForFullscreenText(_ text: String) -> (active: NSFont, sung: NSFont, upcoming: NSFont) {
-        let len = text.count
-        if len <= 35 {
+    private func fontForFullscreenText(_ text: String, availableWidth: CGFloat) -> (active: NSFont, sung: NSFont, upcoming: NSFont) {
+        let testFont = NSFont.systemFont(ofSize: 52, weight: .black)
+        let str = text as NSString
+        let size = str.size(withAttributes: [.font: testFont])
+        
+        if size.width <= availableWidth {
             return (
-                NSFont.systemFont(ofSize: 48, weight: .black),
-                NSFont.systemFont(ofSize: 46, weight: .heavy),
-                NSFont.systemFont(ofSize: 46, weight: .semibold)
+                NSFont.systemFont(ofSize: 52, weight: .black),
+                NSFont.systemFont(ofSize: 50, weight: .heavy),
+                NSFont.systemFont(ofSize: 50, weight: .semibold)
             )
-        } else if len <= 65 {
+        } else if size.width <= availableWidth * 1.25 {
             return (
-                NSFont.systemFont(ofSize: 38, weight: .black),
-                NSFont.systemFont(ofSize: 36, weight: .heavy),
-                NSFont.systemFont(ofSize: 36, weight: .semibold)
+                NSFont.systemFont(ofSize: 42, weight: .black),
+                NSFont.systemFont(ofSize: 40, weight: .heavy),
+                NSFont.systemFont(ofSize: 40, weight: .semibold)
             )
         } else {
             return (
-                NSFont.systemFont(ofSize: 30, weight: .black),
-                NSFont.systemFont(ofSize: 28, weight: .heavy),
-                NSFont.systemFont(ofSize: 28, weight: .semibold)
+                NSFont.systemFont(ofSize: 34, weight: .black),
+                NSFont.systemFont(ofSize: 32, weight: .heavy),
+                NSFont.systemFont(ofSize: 32, weight: .semibold)
             )
         }
     }
@@ -317,16 +320,16 @@ public final class FullscreenLyricsView: NSView {
             nextLine2Label.stringValue = (activeIdx + 2 < lyrics.lines.count) ? lyrics.lines[activeIdx + 2].text : ""
         }
         
-        // Active Line with Word Karaoke Highlighting & Word Wrapping
+        // Active Line with Word Karaoke Highlighting
         let activeLine = lyrics.lines[activeIdx]
         let colors = ThemeManager.shared.resolveColors()
         let attr = NSMutableAttributedString()
         let paraStyle = NSMutableParagraphStyle()
         paraStyle.alignment = .center
-        paraStyle.lineBreakMode = .byWordWrapping
-        paraStyle.lineSpacing = 4.0
+        paraStyle.lineBreakMode = .byTruncatingTail
         
-        let fonts = fontForFullscreenText(activeLine.text)
+        let labelWidth = max(200.0, activeLineLabel.bounds.width > 0 ? activeLineLabel.bounds.width : 1300.0)
+        let fonts = fontForFullscreenText(activeLine.text, availableWidth: labelWidth)
         
         let subtleGlow = NSShadow()
         subtleGlow.shadowColor = colors.glowColor

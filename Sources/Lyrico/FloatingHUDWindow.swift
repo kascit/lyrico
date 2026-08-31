@@ -20,12 +20,12 @@ public final class FloatingHUDWindow: NSPanel {
         let pos = HUDPosition(rawValue: savedPosStr) ?? .bottom
         self.currentPosition = pos
         
-        let width: CGFloat = 860.0
-        let height: CGFloat = 100.0
-        
         let screen = NSScreen.main ?? NSScreen.screens.first
         let screenFrame = screen?.frame ?? NSRect(x: 0, y: 0, width: 1512, height: 982)
         let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1512, height: 949)
+        
+        let width: CGFloat = min(screenFrame.width - 60, 1060.0)
+        let height: CGFloat = 100.0
         
         let x = round((screenFrame.width - width) / 2)
         let bottomY = visibleFrame.origin.y + 36
@@ -61,7 +61,7 @@ public final class FloatingHUDWindow: NSPanel {
         let screenFrame = screen?.frame ?? NSRect(x: 0, y: 0, width: 1512, height: 982)
         let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1512, height: 949)
         
-        let width: CGFloat = 860.0
+        let width: CGFloat = min(screenFrame.width - 60, 1060.0)
         let height: CGFloat = 100.0
         let x = round((screenFrame.width - width) / 2)
         
@@ -107,7 +107,6 @@ public final class FloatingHUDView: NSView {
     private var lastUpcomingText: String = ""
     private var lastLyricLine: LyricLine?
     private var lastPlaybackPos: TimeInterval = 0.0
-    private var isMultiLine: Bool = false
     
     public override init(frame frameRect: NSRect) {
         self.cardView = NSView(frame: .zero)
@@ -147,11 +146,11 @@ public final class FloatingHUDView: NSView {
         cardView.layer?.shadowRadius = 14.0
         addSubview(cardView)
         
-        // Active Line
-        activeLabel.font = NSFont.systemFont(ofSize: 22, weight: .bold)
+        // Active Line (Full-width, bold typography)
+        activeLabel.font = NSFont.systemFont(ofSize: 22.5, weight: .bold)
         activeLabel.alignment = .center
-        activeLabel.lineBreakMode = .byWordWrapping
-        activeLabel.maximumNumberOfLines = 2
+        activeLabel.lineBreakMode = .byTruncatingTail
+        activeLabel.maximumNumberOfLines = 1
         activeLabel.isBezeled = false
         activeLabel.isEditable = false
         activeLabel.drawsBackground = false
@@ -159,7 +158,7 @@ public final class FloatingHUDView: NSView {
         cardView.addSubview(activeLabel)
         
         // Upcoming Line (Bottom Slot)
-        upcomingLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
+        upcomingLabel.font = NSFont.systemFont(ofSize: 13.5, weight: .medium)
         upcomingLabel.alignment = .center
         upcomingLabel.lineBreakMode = .byTruncatingTail
         upcomingLabel.maximumNumberOfLines = 1
@@ -188,30 +187,22 @@ public final class FloatingHUDView: NSView {
         guard b.width > 0 && b.height > 0 else { return }
         
         let cardHeight: CGFloat = (style == .dual) ? 68.0 : 48.0
-        let cardWidth = min(b.width - 20, 820.0)
+        let cardWidth = min(b.width - 24, 1020.0)
         let cardX = (b.width - cardWidth) / 2
         let cardY = (b.height - cardHeight) / 2
         
         cardView.frame = NSRect(x: cardX, y: cardY, width: cardWidth, height: cardHeight)
         
+        let labelPad: CGFloat = 24.0
+        let labelWidth = cardWidth - (labelPad * 2)
+        
         if style == .dual {
+            activeLabel.frame = NSRect(x: labelPad, y: cardHeight - 38, width: labelWidth, height: 28)
             upcomingLabel.isHidden = false
-            if isMultiLine {
-                // Multi-line active text
-                activeLabel.frame = NSRect(x: 20, y: 22, width: cardWidth - 40, height: 38)
-                upcomingLabel.frame = NSRect(x: 20, y: 5, width: cardWidth - 40, height: 16)
-            } else {
-                // Standard 1-line active text (Perfect vertical balance)
-                activeLabel.frame = NSRect(x: 20, y: cardHeight - 38, width: cardWidth - 40, height: 28)
-                upcomingLabel.frame = NSRect(x: 20, y: 8, width: cardWidth - 40, height: 18)
-            }
+            upcomingLabel.frame = NSRect(x: labelPad, y: 8, width: labelWidth, height: 18)
         } else {
+            activeLabel.frame = NSRect(x: labelPad, y: (cardHeight - 28) / 2, width: labelWidth, height: 28)
             upcomingLabel.isHidden = true
-            if isMultiLine {
-                activeLabel.frame = NSRect(x: 20, y: (cardHeight - 38) / 2, width: cardWidth - 40, height: 38)
-            } else {
-                activeLabel.frame = NSRect(x: 20, y: (cardHeight - 28) / 2, width: cardWidth - 40, height: 28)
-            }
         }
     }
     
@@ -232,13 +223,17 @@ public final class FloatingHUDView: NSView {
         }
     }
     
-    private func fontForTextLength(_ length: Int, weight: NSFont.Weight = .bold) -> NSFont {
-        if length <= 38 {
-            return NSFont.systemFont(ofSize: 21.5, weight: weight)
-        } else if length <= 56 {
-            return NSFont.systemFont(ofSize: 18.0, weight: weight)
+    private func fontForText(_ text: String, availableWidth: CGFloat, weight: NSFont.Weight = .bold) -> NSFont {
+        let testFont = NSFont.systemFont(ofSize: 22.5, weight: weight)
+        let str = text as NSString
+        let size = str.size(withAttributes: [.font: testFont])
+        
+        if size.width <= availableWidth {
+            return testFont
+        } else if size.width <= availableWidth * 1.18 {
+            return NSFont.systemFont(ofSize: 19.5, weight: weight)
         } else {
-            return NSFont.systemFont(ofSize: 15.5, weight: weight)
+            return NSFont.systemFont(ofSize: 17.0, weight: weight)
         }
     }
     
@@ -246,12 +241,6 @@ public final class FloatingHUDView: NSView {
         lastLyricLine = line
         lastPlaybackPos = currentPosition
         let isNewLine = line.text != lastLineText
-        
-        let needsMultiLine = line.text.count > 46
-        if needsMultiLine != isMultiLine {
-            isMultiLine = needsMultiLine
-            updateLayout()
-        }
         
         if isNewLine && !line.text.isEmpty {
             let pushUpTransition = CATransition()
@@ -278,13 +267,12 @@ public final class FloatingHUDView: NSView {
         let attr = NSMutableAttributedString()
         let paraStyle = NSMutableParagraphStyle()
         paraStyle.alignment = .center
-        paraStyle.lineBreakMode = .byWordWrapping
-        paraStyle.lineSpacing = 1.0
+        paraStyle.lineBreakMode = .byTruncatingTail
         
-        let textLen = line.text.count
-        let activeFont = fontForTextLength(textLen, weight: .heavy)
-        let sungFont = fontForTextLength(textLen, weight: .bold)
-        let upcomingFont = fontForTextLength(textLen, weight: .medium)
+        let labelWidth = max(200.0, activeLabel.bounds.width > 0 ? activeLabel.bounds.width : 900.0)
+        let activeFont = fontForText(line.text, availableWidth: labelWidth, weight: .heavy)
+        let sungFont = fontForText(line.text, availableWidth: labelWidth, weight: .bold)
+        let upcomingFont = fontForText(line.text, availableWidth: labelWidth, weight: .medium)
         
         let subtleGlow = NSShadow()
         subtleGlow.shadowColor = colors.glowColor
@@ -319,21 +307,15 @@ public final class FloatingHUDView: NSView {
     }
     
     public func setStatic(active: String, upcoming: String = "") {
-        let needsMultiLine = active.count > 46
-        if needsMultiLine != isMultiLine {
-            isMultiLine = needsMultiLine
-            updateLayout()
-        }
-        
         if active == lastLineText && upcoming == lastUpcomingText { return }
         
         let colors = ThemeManager.shared.resolveColors()
         let paraStyle = NSMutableParagraphStyle()
         paraStyle.alignment = .center
-        paraStyle.lineBreakMode = .byWordWrapping
-        paraStyle.lineSpacing = 1.0
+        paraStyle.lineBreakMode = .byTruncatingTail
         
-        let font = fontForTextLength(active.count, weight: .bold)
+        let labelWidth = max(200.0, activeLabel.bounds.width > 0 ? activeLabel.bounds.width : 900.0)
+        let font = fontForText(active, availableWidth: labelWidth, weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: colors.activeText,
