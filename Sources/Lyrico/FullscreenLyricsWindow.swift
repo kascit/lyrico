@@ -162,7 +162,7 @@ public final class FullscreenLyricsView: NSView {
         closeHintLabel.drawsBackground = false
         addSubview(closeHintLabel)
         
-        // Massive Full-Width Typography for Fullscreen
+        // Fullscreen Typography
         prevLineLabel.font = NSFont.systemFont(ofSize: 28, weight: .medium)
         prevLineLabel.alignment = .center
         prevLineLabel.lineBreakMode = .byTruncatingTail
@@ -225,7 +225,7 @@ public final class FullscreenLyricsView: NSView {
         artistLabel.frame = NSRect(x: leftX, y: b.height - 156, width: maxW, height: 30)
         closeHintLabel.frame = NSRect(x: leftX, y: 35, width: maxW, height: 22)
         
-        // Center lyrics column with massive wide typography
+        // Center lyrics column
         activeLineLabel.frame = NSRect(x: leftX, y: centerY - 40, width: maxW, height: 80)
         prevLineLabel.frame = NSRect(x: leftX, y: centerY + 65, width: maxW, height: 50)
         nextLine1Label.frame = NSRect(x: leftX, y: centerY - 115, width: maxW, height: 56)
@@ -320,7 +320,7 @@ public final class FullscreenLyricsView: NSView {
             nextLine2Label.stringValue = (activeIdx + 2 < lyrics.lines.count) ? lyrics.lines[activeIdx + 2].text : ""
         }
         
-        // Active Line with Word Karaoke Highlighting
+        // Active Line
         let activeLine = lyrics.lines[activeIdx]
         let colors = ThemeManager.shared.resolveColors()
         let attr = NSMutableAttributedString()
@@ -336,28 +336,38 @@ public final class FullscreenLyricsView: NSView {
         subtleGlow.shadowOffset = .zero
         subtleGlow.shadowBlurRadius = 14.0
         
-        for (i, word) in activeLine.words.enumerated() {
-            let isCurrent = (position >= word.startTime && position < word.endTime)
-            let isSung = (position >= word.endTime)
-            
-            var attrs: [NSAttributedString.Key: Any] = [
+        if activeLine.hasWordSync && !activeLine.words.isEmpty {
+            for (i, word) in activeLine.words.enumerated() {
+                let isCurrent = (position >= word.startTime && position < word.endTime)
+                let isSung = (position >= word.endTime)
+                
+                var attrs: [NSAttributedString.Key: Any] = [
+                    .paragraphStyle: paraStyle
+                ]
+                
+                if isCurrent {
+                    attrs[.font] = fonts.active
+                    attrs[.foregroundColor] = colors.activeText
+                    attrs[.shadow] = subtleGlow
+                } else if isSung {
+                    attrs[.font] = fonts.sung
+                    attrs[.foregroundColor] = colors.sungText
+                } else {
+                    attrs[.font] = fonts.upcoming
+                    attrs[.foregroundColor] = colors.upcomingText
+                }
+                
+                let wordStr = (i == 0 ? "" : " ") + word.text
+                attr.append(NSAttributedString(string: wordStr, attributes: attrs))
+            }
+        } else {
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: fonts.active,
+                .foregroundColor: colors.activeText,
+                .shadow: subtleGlow,
                 .paragraphStyle: paraStyle
             ]
-            
-            if isCurrent {
-                attrs[.font] = fonts.active
-                attrs[.foregroundColor] = colors.activeText
-                attrs[.shadow] = subtleGlow
-            } else if isSung {
-                attrs[.font] = fonts.sung
-                attrs[.foregroundColor] = colors.sungText
-            } else {
-                attrs[.font] = fonts.upcoming
-                attrs[.foregroundColor] = colors.upcomingText
-            }
-            
-            let wordStr = (i == 0 ? "" : " ") + word.text
-            attr.append(NSAttributedString(string: wordStr, attributes: attrs))
+            attr.append(NSAttributedString(string: activeLine.text, attributes: attrs))
         }
         
         activeLineLabel.attributedStringValue = attr

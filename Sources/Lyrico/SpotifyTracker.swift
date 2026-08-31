@@ -41,6 +41,7 @@ public final class SpotifyTracker {
     public private(set) var currentPosition: TimeInterval = 0.0
     
     public var userOffset: TimeInterval = 0.0
+    public var outputLatencyOffset: TimeInterval = -0.15 // 150ms macOS CoreAudio / DAC output buffer compensation
     
     private var anchorPosition: TimeInterval = 0.0
     private var anchorHostTime: CFTimeInterval = 0.0
@@ -131,7 +132,8 @@ public final class SpotifyTracker {
             }
             
             self.delegate?.spotifyTracker(self, didChangeState: state)
-            self.delegate?.spotifyTracker(self, didTickPlayback: position + self.userOffset)
+            let effectivePos = max(0.0, position + self.userOffset + self.outputLatencyOffset)
+            self.delegate?.spotifyTracker(self, didTickPlayback: effectivePos)
             self.manageDisplayTimer(for: state)
         }
     }
@@ -152,7 +154,8 @@ public final class SpotifyTracker {
             guard let self = self, self.currentState == .playing else { return }
             let elapsed = CACurrentMediaTime() - self.anchorHostTime
             self.currentPosition = self.anchorPosition + elapsed
-            self.delegate?.spotifyTracker(self, didTickPlayback: self.currentPosition + self.userOffset)
+            let effectivePos = max(0.0, self.currentPosition + self.userOffset + self.outputLatencyOffset)
+            self.delegate?.spotifyTracker(self, didTickPlayback: effectivePos)
         }
     }
     
