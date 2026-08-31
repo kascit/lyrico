@@ -123,6 +123,7 @@ public final class SpotifyTracker {
             
             let isNewTrack = self.currentTrack == nil || self.currentTrack?.id != trackID || self.currentTrack?.title != name
             if isNewTrack && !trackID.isEmpty {
+                self.userOffset = 0.0
                 let track = TrackMetadata(id: trackID, title: name, artist: artist, album: album, duration: duration)
                 self.currentTrack = track
                 self.delegate?.spotifyTracker(self, didChangeTrack: track)
@@ -212,6 +213,7 @@ public final class SpotifyTracker {
                 
                 let isNew = self.currentTrack == nil || self.currentTrack?.id != trackID || self.currentTrack?.title != name
                 if isNew && !trackID.isEmpty {
+                    self.userOffset = 0.0
                     let track = TrackMetadata(id: trackID, title: name, artist: artist, album: album, duration: dur, artworkURL: artURL)
                     self.currentTrack = track
                     self.delegate?.spotifyTracker(self, didChangeTrack: track)

@@ -410,6 +410,39 @@ public final class LyricsEngine {
         return result
     }
     
+    public func cleanLyricLineText(_ rawText: String) -> String? {
+        var t = rawText.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return nil }
+        
+        // 1. Standalone section markers or credits that should be completely dropped
+        let standalonePatterns = [
+            "^\\s*\\[?(verse\\s*\\d*|chorus\\s*\\d*|pre-chorus\\s*\\d*|post-chorus\\s*\\d*|hook\\s*\\d*|bridge\\s*\\d*|intro\\s*\\d*|outro\\s*\\d*|break\\s*\\d*|drop\\s*\\d*|solo|instrumental|interlude|refrain)\\]?:?\\s*$",
+            "^(作词|作曲|编曲|制作人|混音|母带|吉他|贝斯|鼓|键盘|录音|和声|企划|统筹|监制|发行|op|sp|lyrics by|composed by|produced by|written by|arranged by|mixed by|mastered by):?.*$"
+        ]
+        for p in standalonePatterns {
+            if let regex = try? NSRegularExpression(pattern: p, options: .caseInsensitive) {
+                let range = NSRange(location: 0, length: (t as NSString).length)
+                if regex.firstMatch(in: t, options: [], range: range) != nil {
+                    return nil
+                }
+            }
+        }
+        
+        // 2. Section prefixes on real lyric lines, e.g. "Verse 1: I just wanna go" -> "I just wanna go"
+        let prefixPatterns = [
+            "^\\s*\\[?(verse\\s*\\d*|chorus\\s*\\d*|pre-chorus\\s*\\d*|post-chorus\\s*\\d*|hook\\s*\\d*|bridge\\s*\\d*|intro\\s*\\d*|outro\\s*\\d*)\\]?\\s*:\\s*",
+            "^\\s*\\[(verse\\s*\\d*|chorus\\s*\\d*|pre-chorus\\s*\\d*|post-chorus\\s*\\d*|hook\\s*\\d*|bridge\\s*\\d*|intro\\s*\\d*|outro\\s*\\d*)\\]\\s*"
+        ]
+        for p in prefixPatterns {
+            if let regex = try? NSRegularExpression(pattern: p, options: .caseInsensitive) {
+                let range = NSRange(location: 0, length: (t as NSString).length)
+                t = regex.stringByReplacingMatches(in: t, options: [], range: range, withTemplate: "").trimmingCharacters(in: .whitespaces)
+            }
+        }
+        
+        return t.isEmpty ? nil : t
+    }
+    
     // MARK: - Enhanced LRC Parser
     
     public func parseLRC(_ lrc: String, duration: TimeInterval) -> [LyricLine] {
@@ -450,29 +483,31 @@ public final class LyricsEngine {
                 let msDivider = msStr.count == 2 ? 100.0 : 1000.0
                 let totalTime = (minutes * 60.0) + seconds + (fractions / msDivider) + offsetSeconds
                 
-                if !content.isEmpty && !content.hasPrefix("//") && !content.hasPrefix("作词") && !content.hasPrefix("作曲") {
-                    var parsedWords: [LyricWord] = []
-                    let contentNS = content as NSString
-                    let wordMatches = wordTagRegex?.matches(in: content, range: NSRange(location: 0, length: contentNS.length)) ?? []
-                    
-                    if !wordMatches.isEmpty {
-                        var prevWordTime: TimeInterval = totalTime
-                        var cleanText = ""
-                        for wMatch in wordMatches {
-                            let wMin = Double(contentNS.substring(with: wMatch.range(at: 1))) ?? 0
-                            let wSec = Double(contentNS.substring(with: wMatch.range(at: 2))) ?? 0
-                            let wMs = Double(contentNS.substring(with: wMatch.range(at: 3))) ?? 0
-                            let wText = contentNS.substring(with: wMatch.range(at: 4)).trimmingCharacters(in: .whitespaces)
-                            let wTime = (wMin * 60.0) + wSec + (wMs / 100.0) + offsetSeconds
-                            
-                            cleanText += (cleanText.isEmpty ? "" : " ") + wText
-                            parsedWords.append(LyricWord(text: wText, startTime: prevWordTime, endTime: max(prevWordTime + 0.20, wTime)))
-                            prevWordTime = wTime
-                        }
-                        rawLines.append((time: totalTime, text: cleanText, words: parsedWords))
-                    } else {
-                        rawLines.append((time: totalTime, text: content, words: []))
+                guard let cleanContent = cleanLyricLineText(content) else {
+                    continue
+                }
+                
+                var parsedWords: [LyricWord] = []
+                let contentNS = cleanContent as NSString
+                let wordMatches = wordTagRegex?.matches(in: cleanContent, range: NSRange(location: 0, length: contentNS.length)) ?? []
+                
+                if !wordMatches.isEmpty {
+                    var prevWordTime: TimeInterval = totalTime
+                    var cleanText = ""
+                    for wMatch in wordMatches {
+                        let wMin = Double(contentNS.substring(with: wMatch.range(at: 1))) ?? 0
+                        let wSec = Double(contentNS.substring(with: wMatch.range(at: 2))) ?? 0
+                        let wMs = Double(contentNS.substring(with: wMatch.range(at: 3))) ?? 0
+                        let wText = contentNS.substring(with: wMatch.range(at: 4)).trimmingCharacters(in: .whitespaces)
+                        let wTime = (wMin * 60.0) + wSec + (wMs / 100.0) + offsetSeconds
+                        
+                        cleanText += (cleanText.isEmpty ? "" : " ") + wText
+                        parsedWords.append(LyricWord(text: wText, startTime: prevWordTime, endTime: max(prevWordTime + 0.20, wTime)))
+                        prevWordTime = wTime
                     }
+                    rawLines.append((time: totalTime, text: cleanText, words: parsedWords))
+                } else {
+                    rawLines.append((time: totalTime, text: cleanContent, words: []))
                 }
             }
         }
@@ -504,10 +539,8 @@ public final class LyricsEngine {
         for line in plain.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
-            if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") { continue }
-            if trimmed.hasPrefix("(") && trimmed.hasSuffix(")") && trimmed.count < 15 { continue }
-            if trimmed.lowercased().hasPrefix("verse") || trimmed.lowercased().hasPrefix("chorus") { continue }
-            rawLines.append(trimmed)
+            guard let clean = cleanLyricLineText(trimmed) else { continue }
+            rawLines.append(clean)
         }
         
         guard !rawLines.isEmpty else { return [] }

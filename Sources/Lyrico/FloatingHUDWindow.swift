@@ -20,8 +20,8 @@ public final class FloatingHUDWindow: NSPanel {
         let pos = HUDPosition(rawValue: savedPosStr) ?? .bottom
         self.currentPosition = pos
         
-        let width: CGFloat = 880.0
-        let height: CGFloat = 110.0
+        let width: CGFloat = 860.0
+        let height: CGFloat = 100.0
         
         let screen = NSScreen.main ?? NSScreen.screens.first
         let screenFrame = screen?.frame ?? NSRect(x: 0, y: 0, width: 1512, height: 982)
@@ -61,8 +61,8 @@ public final class FloatingHUDWindow: NSPanel {
         let screenFrame = screen?.frame ?? NSRect(x: 0, y: 0, width: 1512, height: 982)
         let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1512, height: 949)
         
-        let width: CGFloat = 880.0
-        let height: CGFloat = 110.0
+        let width: CGFloat = 860.0
+        let height: CGFloat = 100.0
         let x = round((screenFrame.width - width) / 2)
         
         let y: CGFloat
@@ -107,6 +107,7 @@ public final class FloatingHUDView: NSView {
     private var lastUpcomingText: String = ""
     private var lastLyricLine: LyricLine?
     private var lastPlaybackPos: TimeInterval = 0.0
+    private var isMultiLine: Bool = false
     
     public override init(frame frameRect: NSRect) {
         self.cardView = NSView(frame: .zero)
@@ -146,8 +147,8 @@ public final class FloatingHUDView: NSView {
         cardView.layer?.shadowRadius = 14.0
         addSubview(cardView)
         
-        // Active Line (Multi-Line Enabled with Word Wrapping)
-        activeLabel.font = NSFont.systemFont(ofSize: 21, weight: .bold)
+        // Active Line
+        activeLabel.font = NSFont.systemFont(ofSize: 22, weight: .bold)
         activeLabel.alignment = .center
         activeLabel.lineBreakMode = .byWordWrapping
         activeLabel.maximumNumberOfLines = 2
@@ -186,20 +187,31 @@ public final class FloatingHUDView: NSView {
         let b = bounds
         guard b.width > 0 && b.height > 0 else { return }
         
-        let cardHeight: CGFloat = style == .dual ? 76.0 : 54.0
-        let cardWidth = min(b.width - 20, 840.0)
+        let cardHeight: CGFloat = (style == .dual) ? 68.0 : 48.0
+        let cardWidth = min(b.width - 20, 820.0)
         let cardX = (b.width - cardWidth) / 2
         let cardY = (b.height - cardHeight) / 2
         
         cardView.frame = NSRect(x: cardX, y: cardY, width: cardWidth, height: cardHeight)
         
         if style == .dual {
-            activeLabel.frame = NSRect(x: 20, y: cardHeight - 48, width: cardWidth - 40, height: 44)
             upcomingLabel.isHidden = false
-            upcomingLabel.frame = NSRect(x: 20, y: 6, width: cardWidth - 40, height: 18)
+            if isMultiLine {
+                // Multi-line active text
+                activeLabel.frame = NSRect(x: 20, y: 22, width: cardWidth - 40, height: 38)
+                upcomingLabel.frame = NSRect(x: 20, y: 5, width: cardWidth - 40, height: 16)
+            } else {
+                // Standard 1-line active text (Perfect vertical balance)
+                activeLabel.frame = NSRect(x: 20, y: cardHeight - 38, width: cardWidth - 40, height: 28)
+                upcomingLabel.frame = NSRect(x: 20, y: 8, width: cardWidth - 40, height: 18)
+            }
         } else {
-            activeLabel.frame = NSRect(x: 20, y: (cardHeight - 44) / 2, width: cardWidth - 40, height: 44)
             upcomingLabel.isHidden = true
+            if isMultiLine {
+                activeLabel.frame = NSRect(x: 20, y: (cardHeight - 38) / 2, width: cardWidth - 40, height: 38)
+            } else {
+                activeLabel.frame = NSRect(x: 20, y: (cardHeight - 28) / 2, width: cardWidth - 40, height: 28)
+            }
         }
     }
     
@@ -221,12 +233,12 @@ public final class FloatingHUDView: NSView {
     }
     
     private func fontForTextLength(_ length: Int, weight: NSFont.Weight = .bold) -> NSFont {
-        if length <= 35 {
-            return NSFont.systemFont(ofSize: 20.5, weight: weight)
-        } else if length <= 55 {
-            return NSFont.systemFont(ofSize: 17.5, weight: weight)
+        if length <= 38 {
+            return NSFont.systemFont(ofSize: 21.5, weight: weight)
+        } else if length <= 56 {
+            return NSFont.systemFont(ofSize: 18.0, weight: weight)
         } else {
-            return NSFont.systemFont(ofSize: 15.0, weight: weight)
+            return NSFont.systemFont(ofSize: 15.5, weight: weight)
         }
     }
     
@@ -234,6 +246,12 @@ public final class FloatingHUDView: NSView {
         lastLyricLine = line
         lastPlaybackPos = currentPosition
         let isNewLine = line.text != lastLineText
+        
+        let needsMultiLine = line.text.count > 46
+        if needsMultiLine != isMultiLine {
+            isMultiLine = needsMultiLine
+            updateLayout()
+        }
         
         if isNewLine && !line.text.isEmpty {
             let pushUpTransition = CATransition()
@@ -301,6 +319,12 @@ public final class FloatingHUDView: NSView {
     }
     
     public func setStatic(active: String, upcoming: String = "") {
+        let needsMultiLine = active.count > 46
+        if needsMultiLine != isMultiLine {
+            isMultiLine = needsMultiLine
+            updateLayout()
+        }
+        
         if active == lastLineText && upcoming == lastUpcomingText { return }
         
         let colors = ThemeManager.shared.resolveColors()
