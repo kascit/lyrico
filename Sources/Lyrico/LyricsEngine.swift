@@ -37,7 +37,7 @@ public struct LyricLine: Equatable, Codable {
         let totalChars = rawWords.reduce(0) { $0 + max(1, $1.count) }
         let totalDuration = max(0.4, end - start)
         
-        // Natural singing duration: human vocals average ~0.12 - 0.16s per character
+        // Natural human vocal cadence: ~0.12 - 0.15s per character
         let naturalVocalDuration = max(1.0, min(Double(totalChars) * 0.14, totalDuration))
         let vocalTime = min(totalDuration, naturalVocalDuration)
         
@@ -69,12 +69,10 @@ public struct ParsedLyrics: Equatable, Codable {
     public func activeLineIndex(at position: TimeInterval) -> Int {
         guard !lines.isEmpty else { return -1 }
         
-        // Before first line starts
         if position < lines[0].startTime {
             return -1
         }
         
-        // Find the most recent line that has started
         for i in stride(from: lines.count - 1, through: 0, by: -1) {
             if position >= lines[i].startTime {
                 return i
@@ -110,9 +108,9 @@ public final class LyricsEngine {
     }
     
     public func fetchLyrics(title: String, artist: String, album: String, duration: TimeInterval, completion: @escaping (ParsedLyrics?) -> Void) {
-        let cleanTitle = sanitizeTitle(title)
-        let cleanArtist = sanitizeArtist(artist)
-        let key = cacheKey(title: cleanTitle, artist: cleanArtist)
+        let cleanT = sanitizeTitle(title)
+        let cleanA = sanitizeArtist(artist)
+        let key = cacheKey(title: cleanT, artist: cleanA)
         
         if let cached = memoryCache[key] {
             completion(cached)
@@ -130,29 +128,52 @@ public final class LyricsEngine {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             
-            // 1. Try LRCLIB direct get
-            if let lyrics = self.fetchFromLRCLIB(title: cleanTitle, artist: cleanArtist, album: album, duration: duration) {
+            // Tier 1: LRCLIB exact get
+            if let lyrics = self.fetchFromLRCLIB(title: title, artist: artist, album: album, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
                 return
             }
             
-            // 2. Try NetEase CloudSearch Synced API
-            if let lyrics = self.fetchFromNetEase(title: cleanTitle, artist: cleanArtist, duration: duration) {
+            // Tier 2: LRCLIB cleaned title + artist
+            if cleanT != title || cleanA != artist {
+                if let lyrics = self.fetchFromLRCLIB(title: cleanT, artist: cleanA, album: "", duration: duration) {
+                    self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
+                    DispatchQueue.main.async { completion(lyrics) }
+                    return
+                }
+            }
+            
+            // Tier 3: NetEase CloudSearch Synced API
+            if let lyrics = self.fetchFromNetEase(title: cleanT, artist: cleanA, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
                 return
             }
             
-            // 3. Try Kugou Synced database
-            if let lyrics = self.fetchFromKugou(title: cleanTitle, artist: cleanArtist, duration: duration) {
+            // Tier 4: Kugou Synced database
+            if let lyrics = self.fetchFromKugou(title: cleanT, artist: cleanA, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
                 return
             }
             
-            // 4. Try LRCLIB plain text fallback
-            if let lyrics = self.fetchPlainFromLRCLIB(title: cleanTitle, artist: cleanArtist, duration: duration) {
+            // Tier 5: LRCLIB search query with duration filtering
+            if let lyrics = self.searchLRCLIB(query: "\(cleanT) \(cleanA)", duration: duration) {
+                self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
+                DispatchQueue.main.async { completion(lyrics) }
+                return
+            }
+            
+            // Tier 6: LRCLIB title-only search
+            if let lyrics = self.searchLRCLIB(query: cleanT, duration: duration) {
+                self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
+                DispatchQueue.main.async { completion(lyrics) }
+                return
+            }
+            
+            // Tier 7: LRCLIB plain text fallback
+            if let lyrics = self.fetchPlainFromLRCLIB(title: cleanT, artist: cleanA, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
                 return
@@ -203,10 +224,6 @@ public final class LyricsEngine {
         task.resume()
         _ = semaphore.wait(timeout: .now() + 3.0)
         
-        if result == nil {
-            result = searchLRCLIB(query: "\(title) \(artist)", duration: duration)
-        }
-        
         return result
     }
     
@@ -233,9 +250,13 @@ public final class LyricsEngine {
                 }
                 
                 if let best = sortedByDuration.first, let synced = best["syncedLyrics"] as? String {
-                    let lines = self?.parseLRC(synced, duration: duration) ?? []
-                    if !lines.isEmpty {
-                        result = ParsedLyrics(lines: lines, isSynced: true, source: "LRCLIB Search")
+                    let bestDur = (best["duration"] as? Double) ?? 0
+                    // Duration match within +/- 4.0 seconds if duration is known
+                    if duration == 0 || abs(bestDur - duration) <= 4.0 {
+                        let lines = self?.parseLRC(synced, duration: duration) ?? []
+                        if !lines.isEmpty {
+                            result = ParsedLyrics(lines: lines, isSynced: true, source: "LRCLIB Search")
+                        }
                     }
                 }
             }
@@ -356,6 +377,8 @@ public final class LyricsEngine {
         return parsed
     }
     
+    // MARK: - Plain Text Provider
+    
     private func fetchPlainFromLRCLIB(title: String, artist: String, duration: TimeInterval) -> ParsedLyrics? {
         guard let encoded = "\(title) \(artist)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "https://lrclib.net/api/search?q=\(encoded)") else { return nil }
@@ -403,7 +426,6 @@ public final class LyricsEngine {
             
             let nsString = trimmed as NSString
             
-            // Check for offset header
             if let offMatch = offsetRegex?.firstMatch(in: trimmed, range: NSRange(location: 0, length: nsString.length)) {
                 let offStr = nsString.substring(with: offMatch.range(at: 1))
                 if let offMs = Double(offStr) {
@@ -428,7 +450,6 @@ public final class LyricsEngine {
                 let msDivider = msStr.count == 2 ? 100.0 : 1000.0
                 let totalTime = (minutes * 60.0) + seconds + (fractions / msDivider) + offsetSeconds
                 
-                // Skip metadata headers like [ar:], [al:], [ti:], [by:], [length:], 作词, 作曲
                 if !content.isEmpty && !content.hasPrefix("//") && !content.hasPrefix("作词") && !content.hasPrefix("作曲") {
                     var parsedWords: [LyricWord] = []
                     let contentNS = content as NSString
@@ -510,10 +531,28 @@ public final class LyricsEngine {
     
     private func sanitizeTitle(_ title: String) -> String {
         var t = title
+        let patterns = [
+            "\\s*[\\(\\[][fF]eat\\.?[^\\)\\]]*[\\)\\]]",
+            "\\s*[\\(\\[][fF]t\\.?[^\\)\\]]*[\\)\\]]",
+            "\\s*[\\(\\[][wW]ith[^\\)\\]]*[\\)\\]]",
+            "\\s*[\\(\\[][rR]emaster[^\\)\\]]*[\\)\\]]",
+            "\\s*[\\(\\[][lL]ive[^\\)\\]]*[\\)\\]]",
+            "\\s*-\\s*[rR]emastered.*",
+            "\\s*-\\s*[lL]ive.*",
+            "\\s*-\\s*[rR]adio [eE]dit.*",
+            "\\s*-\\s*[sS]ingle [vV]ersion.*",
+            "\\s*-\\s*[oO]riginal [mM]ix.*",
+            "\\s*-\\s*[aA]coustic.*"
+        ]
+        
+        for p in patterns {
+            if let regex = try? NSRegularExpression(pattern: p, options: []) {
+                let range = NSRange(location: 0, length: (t as NSString).length)
+                t = regex.stringByReplacingMatches(in: t, options: [], range: range, withTemplate: "")
+            }
+        }
+        
         if let idx = t.range(of: " - ") { t = String(t[..<idx.lowerBound]) }
-        if let idx = t.range(of: " (feat.") { t = String(t[..<idx.lowerBound]) }
-        if let idx = t.range(of: " (with ") { t = String(t[..<idx.lowerBound]) }
-        if let idx = t.range(of: " [feat.") { t = String(t[..<idx.lowerBound]) }
         return t.trimmingCharacters(in: .whitespaces)
     }
     
@@ -521,6 +560,8 @@ public final class LyricsEngine {
         var a = artist
         if let idx = a.range(of: ", ") { a = String(a[..<idx.lowerBound]) }
         if let idx = a.range(of: " feat. ") { a = String(a[..<idx.lowerBound]) }
+        if let idx = a.range(of: " ft. ") { a = String(a[..<idx.lowerBound]) }
+        if let idx = a.range(of: " & ") { a = String(a[..<idx.lowerBound]) }
         return a.trimmingCharacters(in: .whitespaces)
     }
 }
