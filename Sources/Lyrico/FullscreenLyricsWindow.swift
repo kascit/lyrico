@@ -320,7 +320,7 @@ public final class FullscreenLyricsView: NSView {
             nextLine2Label.stringValue = (activeIdx + 2 < lyrics.lines.count) ? lyrics.lines[activeIdx + 2].text : ""
         }
         
-        // Active Line
+        // Active Line Progressive Word Karaoke
         let activeLine = lyrics.lines[activeIdx]
         let colors = ThemeManager.shared.resolveColors()
         let attr = NSMutableAttributedString()
@@ -336,38 +336,28 @@ public final class FullscreenLyricsView: NSView {
         subtleGlow.shadowOffset = .zero
         subtleGlow.shadowBlurRadius = 14.0
         
-        if activeLine.hasWordSync && !activeLine.words.isEmpty {
-            for (i, word) in activeLine.words.enumerated() {
-                let isCurrent = (position >= word.startTime && position < word.endTime)
-                let isSung = (position >= word.endTime)
-                
-                var attrs: [NSAttributedString.Key: Any] = [
-                    .paragraphStyle: paraStyle
-                ]
-                
-                if isCurrent {
-                    attrs[.font] = fonts.active
-                    attrs[.foregroundColor] = colors.activeText
-                    attrs[.shadow] = subtleGlow
-                } else if isSung {
-                    attrs[.font] = fonts.sung
-                    attrs[.foregroundColor] = colors.sungText
-                } else {
-                    attrs[.font] = fonts.upcoming
-                    attrs[.foregroundColor] = colors.upcomingText
-                }
-                
-                let wordStr = (i == 0 ? "" : " ") + word.text
-                attr.append(NSAttributedString(string: wordStr, attributes: attrs))
-            }
-        } else {
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: fonts.active,
-                .foregroundColor: colors.activeText,
-                .shadow: subtleGlow,
+        for (i, word) in activeLine.words.enumerated() {
+            let isCurrent = (position >= word.startTime && position < word.endTime)
+            let isSung = (position >= word.endTime)
+            
+            var attrs: [NSAttributedString.Key: Any] = [
                 .paragraphStyle: paraStyle
             ]
-            attr.append(NSAttributedString(string: activeLine.text, attributes: attrs))
+            
+            if isCurrent {
+                attrs[.font] = fonts.active
+                attrs[.foregroundColor] = colors.activeText
+                attrs[.shadow] = subtleGlow
+            } else if isSung {
+                attrs[.font] = fonts.sung
+                attrs[.foregroundColor] = colors.sungText
+            } else {
+                attrs[.font] = fonts.upcoming
+                attrs[.foregroundColor] = colors.upcomingText
+            }
+            
+            let wordStr = (i == 0 ? "" : " ") + word.text
+            attr.append(NSAttributedString(string: wordStr, attributes: attrs))
         }
         
         activeLineLabel.attributedStringValue = attr

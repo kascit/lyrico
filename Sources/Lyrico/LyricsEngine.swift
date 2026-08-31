@@ -17,15 +17,37 @@ public struct LyricLine: Equatable, Codable {
     public let startTime: TimeInterval
     public var endTime: TimeInterval
     public let text: String
-    public let hasWordSync: Bool
     public var words: [LyricWord]
     
-    public init(startTime: TimeInterval, endTime: TimeInterval, text: String, hasWordSync: Bool = false, words: [LyricWord] = []) {
+    public init(startTime: TimeInterval, endTime: TimeInterval, text: String, words: [LyricWord] = []) {
         self.startTime = startTime
         self.endTime = endTime
         self.text = text
-        self.hasWordSync = hasWordSync
-        self.words = words
+        if !words.isEmpty {
+            self.words = words
+        } else {
+            self.words = LyricLine.generateWords(for: text, start: startTime, end: endTime)
+        }
+    }
+    
+    public static func generateWords(for lineText: String, start: TimeInterval, end: TimeInterval) -> [LyricWord] {
+        let rawWords = lineText.components(separatedBy: " ").filter { !$0.isEmpty }
+        guard !rawWords.isEmpty else { return [] }
+        
+        let totalChars = max(1, rawWords.reduce(0) { $0 + max(1, $1.count) })
+        let totalDuration = max(0.4, end - start)
+        
+        var cursor = start
+        var result: [LyricWord] = []
+        
+        for word in rawWords {
+            let ratio = Double(max(1, word.count)) / Double(totalChars)
+            let wordDuration = max(0.08, totalDuration * ratio)
+            let wordEnd = min(cursor + wordDuration, end)
+            result.append(LyricWord(text: word, startTime: cursor, endTime: wordEnd))
+            cursor = wordEnd
+        }
+        return result
     }
 }
 
@@ -450,7 +472,7 @@ public final class LyricsEngine {
     // MARK: - Enhanced LRC Parser
     
     public func parseLRC(_ lrc: String, duration: TimeInterval) -> [LyricLine] {
-        var rawLines: [(time: TimeInterval, text: String, hasWordSync: Bool, words: [LyricWord])] = []
+        var rawLines: [(time: TimeInterval, text: String, words: [LyricWord])] = []
         let lineRegex = try? NSRegularExpression(pattern: "\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})\\](.*)")
         let wordTagRegex = try? NSRegularExpression(pattern: "<(\\d{2}):(\\d{2})\\.(\\d{2,3})>([^<]+)")
         let offsetRegex = try? NSRegularExpression(pattern: "\\[offset:([+-]?\\d+)\\]", options: .caseInsensitive)
@@ -506,12 +528,12 @@ public final class LyricsEngine {
                         let wTime = (wMin * 60.0) + wSec + (wMs / 100.0) + offsetSeconds
                         
                         cleanText += (cleanText.isEmpty ? "" : " ") + wText
-                        parsedWords.append(LyricWord(text: wText, startTime: prevWordTime, endTime: max(prevWordTime + 0.20, wTime)))
+                        parsedWords.append(LyricWord(text: wText, startTime: prevWordTime, endTime: max(prevWordTime + 0.15, wTime)))
                         prevWordTime = wTime
                     }
-                    rawLines.append((time: totalTime, text: cleanText, hasWordSync: true, words: parsedWords))
+                    rawLines.append((time: totalTime, text: cleanText, words: parsedWords))
                 } else {
-                    rawLines.append((time: totalTime, text: cleanContent, hasWordSync: false, words: []))
+                    rawLines.append((time: totalTime, text: cleanContent, words: []))
                 }
             }
         }
@@ -523,7 +545,6 @@ public final class LyricsEngine {
         for i in 0..<rawLines.count {
             let start = rawLines[i].time
             let text = rawLines[i].text
-            let hasWordSync = rawLines[i].hasWordSync
             let words = rawLines[i].words
             let end: TimeInterval
             if i + 1 < rawLines.count {
@@ -531,7 +552,7 @@ public final class LyricsEngine {
             } else {
                 end = duration > start ? duration : start + 5.0
             }
-            result.append(LyricLine(startTime: start, endTime: end, text: text, hasWordSync: hasWordSync, words: words))
+            result.append(LyricLine(startTime: start, endTime: end, text: text, words: words))
         }
         
         return result
@@ -561,7 +582,7 @@ public final class LyricsEngine {
         for (idx, text) in rawLines.enumerated() {
             let start = introPadding + (Double(idx) * timePerLine)
             let end = start + timePerLine
-            result.append(LyricLine(startTime: start, endTime: end, text: text, hasWordSync: false, words: []))
+            result.append(LyricLine(startTime: start, endTime: end, text: text))
         }
         
         return result

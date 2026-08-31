@@ -41,7 +41,6 @@ public final class SpotifyTracker {
     public private(set) var currentPosition: TimeInterval = 0.0
     
     public var userOffset: TimeInterval = 0.0
-    public var visualLeadOffset: TimeInterval = 0.28 // 280ms lead matching Apple Music / Spotify native visual onset
     
     private var anchorPosition: TimeInterval = 0.0
     private var anchorHostTime: CFTimeInterval = 0.0
@@ -133,14 +132,14 @@ public final class SpotifyTracker {
             }
             
             self.delegate?.spotifyTracker(self, didChangeState: state)
-            let effectivePos = max(0.0, position + self.userOffset + self.visualLeadOffset)
-            self.delegate?.spotifyTracker(self, didTickPlayback: effectivePos)
+            let exactPos = max(0.0, position + self.userOffset)
+            self.delegate?.spotifyTracker(self, didTickPlayback: exactPos)
             self.manageDisplayTimer(for: state)
         }
     }
     
     private func startTimers() {
-        periodicSyncTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
+        periodicSyncTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.pollState()
         }
     }
@@ -156,8 +155,8 @@ public final class SpotifyTracker {
             let now = CACurrentMediaTime()
             let elapsed = max(0.0, now - self.anchorHostTime)
             self.currentPosition = self.anchorPosition + elapsed
-            let effectivePos = max(0.0, self.currentPosition + self.userOffset + self.visualLeadOffset)
-            self.delegate?.spotifyTracker(self, didTickPlayback: effectivePos)
+            let exactPos = max(0.0, self.currentPosition + self.userOffset)
+            self.delegate?.spotifyTracker(self, didTickPlayback: exactPos)
         }
     }
     
@@ -171,8 +170,8 @@ public final class SpotifyTracker {
             let sampleEnd = CACurrentMediaTime()
             guard errorInfo == nil else { return }
             
-            // Estimated time when Spotify actually sampled its position (midpoint of IPC call)
-            let estimatedSampleHostTime = sampleStart + ((sampleEnd - sampleStart) / 2.0)
+            // Exact timestamp when Spotify processed the AppleEvent
+            let sampleHostTime = sampleStart + ((sampleEnd - sampleStart) / 2.0)
             
             if result.stringValue == "not_running" {
                 DispatchQueue.main.async {
@@ -220,13 +219,13 @@ public final class SpotifyTracker {
                     self.delegate?.spotifyTracker(self, didChangeTrack: track)
                 }
                 
-                let predictedPos = self.anchorPosition + (estimatedSampleHostTime - self.anchorHostTime)
+                let predictedPos = self.anchorPosition + (sampleHostTime - self.anchorHostTime)
                 
-                // Only re-anchor if there is a real seek (>1.2s) or track change or state change
-                if abs(predictedPos - rawPos) > 1.2 || stateChanged || isNew {
+                // Only re-anchor if there is a real seek (>0.8s) or track change or state change
+                if abs(predictedPos - rawPos) > 0.8 || stateChanged || isNew {
                     self.anchorPosition = rawPos
-                    self.anchorHostTime = estimatedSampleHostTime
-                    self.currentPosition = rawPos + max(0.0, CACurrentMediaTime() - estimatedSampleHostTime)
+                    self.anchorHostTime = sampleHostTime
+                    self.currentPosition = rawPos + max(0.0, CACurrentMediaTime() - sampleHostTime)
                 }
                 
                 if stateChanged {

@@ -244,7 +244,7 @@ public final class FloatingHUDView: NSView {
         
         if isNewLine && !line.text.isEmpty {
             let pushUpTransition = CATransition()
-            pushUpTransition.duration = 0.16
+            pushUpTransition.duration = 0.20
             pushUpTransition.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             pushUpTransition.type = .push
             pushUpTransition.subtype = .fromBottom
@@ -255,7 +255,7 @@ public final class FloatingHUDView: NSView {
         
         if upcomingText != lastUpcomingText {
             let fadeTransition = CATransition()
-            fadeTransition.duration = 0.22
+            fadeTransition.duration = 0.20
             fadeTransition.timingFunction = CAMediaTimingFunction(name: .easeOut)
             fadeTransition.type = .fade
             upcomingLabel.layer?.add(fadeTransition, forKey: "upcomingFade")
@@ -279,39 +279,28 @@ public final class FloatingHUDView: NSView {
         subtleGlow.shadowOffset = .zero
         subtleGlow.shadowBlurRadius = 8.0
         
-        if line.hasWordSync && !line.words.isEmpty {
-            for (i, word) in line.words.enumerated() {
-                let isCurrentWord = (currentPosition >= word.startTime && currentPosition < word.endTime)
-                let isSungWord = (currentPosition >= word.endTime)
-                
-                var attrs: [NSAttributedString.Key: Any] = [
-                    .paragraphStyle: paraStyle
-                ]
-                
-                if isCurrentWord {
-                    attrs[.font] = activeFont
-                    attrs[.foregroundColor] = colors.activeText
-                    attrs[.shadow] = subtleGlow
-                } else if isSungWord {
-                    attrs[.font] = sungFont
-                    attrs[.foregroundColor] = colors.sungText
-                } else {
-                    attrs[.font] = upcomingFont
-                    attrs[.foregroundColor] = colors.upcomingText
-                }
-                
-                let wordStr = (i == 0 ? "" : " ") + word.text
-                attr.append(NSAttributedString(string: wordStr, attributes: attrs))
-            }
-        } else {
-            // Standard line sync: The entire active line lights up cleanly in glowing white
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: activeFont,
-                .foregroundColor: colors.activeText,
-                .shadow: subtleGlow,
+        for (i, word) in line.words.enumerated() {
+            let isCurrentWord = (currentPosition >= word.startTime && currentPosition < word.endTime)
+            let isSungWord = (currentPosition >= word.endTime)
+            
+            var attrs: [NSAttributedString.Key: Any] = [
                 .paragraphStyle: paraStyle
             ]
-            attr.append(NSAttributedString(string: line.text, attributes: attrs))
+            
+            if isCurrentWord {
+                attrs[.font] = activeFont
+                attrs[.foregroundColor] = colors.activeText
+                attrs[.shadow] = subtleGlow
+            } else if isSungWord {
+                attrs[.font] = sungFont
+                attrs[.foregroundColor] = colors.sungText
+            } else {
+                attrs[.font] = upcomingFont
+                attrs[.foregroundColor] = colors.upcomingText
+            }
+            
+            let wordStr = (i == 0 ? "" : " ") + word.text
+            attr.append(NSAttributedString(string: wordStr, attributes: attrs))
         }
         
         activeLabel.attributedStringValue = attr
