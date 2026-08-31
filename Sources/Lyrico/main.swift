@@ -57,12 +57,8 @@ final class LyricoApp: NSObject, NSApplicationDelegate, SpotifyTrackerDelegate, 
             self.currentLyrics = lyrics
             self.fullscreenWindow.fullscreenView.updateLyrics(lyrics: lyrics)
             
-            if let l = lyrics {
-                if l.isSynced {
-                    self.fullscreenWindow.fullscreenView.tickPlayback(position: self.spotifyTracker.currentPosition + self.spotifyTracker.userOffset)
-                } else {
-                    self.hudWindow.hudView.setStatic(active: track.title, upcoming: "Plain lyrics (Unsynced) • ⌥⌃F for full text")
-                }
+            if lyrics != nil {
+                self.fullscreenWindow.fullscreenView.tickPlayback(position: self.spotifyTracker.currentPosition + self.spotifyTracker.userOffset)
             } else {
                 self.hudWindow.hudView.setStatic(active: track.title, upcoming: track.artist)
             }
@@ -95,16 +91,6 @@ final class LyricoApp: NSObject, NSApplicationDelegate, SpotifyTrackerDelegate, 
     
     func spotifyTracker(_ tracker: SpotifyTracker, didTickPlayback position: TimeInterval) {
         guard let lyrics = currentLyrics, !lyrics.lines.isEmpty else { return }
-        
-        if !lyrics.isSynced {
-            // For unsynced plain lyrics, don't jump lines on a fake linear timer
-            let trackName = spotifyTracker.currentTrack?.title ?? "♫"
-            hudWindow.hudView.setStatic(active: trackName, upcoming: "Plain lyrics (Unsynced) • ⌥⌃F for full text")
-            if fullscreenWindow.isShowingFullscreen {
-                fullscreenWindow.fullscreenView.tickPlayback(position: position)
-            }
-            return
-        }
         
         let activeIdx = lyrics.activeLineIndex(at: position)
         
@@ -174,11 +160,11 @@ final class LyricoApp: NSObject, NSApplicationDelegate, SpotifyTrackerDelegate, 
             return fullscreenWindow.isShowingFullscreen ? "fullscreen" : "floating"
             
         case "offset-earlier":
-            spotifyTracker.userOffset -= 0.3
+            spotifyTracker.userOffset -= 0.5
             return "offset: \(String(format: "%.1f", spotifyTracker.userOffset))s"
             
         case "offset-later":
-            spotifyTracker.userOffset += 0.3
+            spotifyTracker.userOffset += 0.5
             return "offset: \(String(format: "%.1f", spotifyTracker.userOffset))s"
             
         case "offset-reset":
