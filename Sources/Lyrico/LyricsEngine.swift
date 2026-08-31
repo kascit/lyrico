@@ -88,6 +88,7 @@ public final class LyricsEngine {
     
     private let cacheDirectory: URL
     private var memoryCache: [String: ParsedLyrics] = [:]
+    private let cacheLock = NSLock()
     private let session: URLSession
     
     public init() {
@@ -101,26 +102,30 @@ public final class LyricsEngine {
         self.session = URLSession(configuration: config)
     }
     
-    private func cacheKey(title: String, artist: String) -> String {
-        let raw = "\(artist.lowercased().trimmingCharacters(in: .whitespaces)) - \(title.lowercased().trimmingCharacters(in: .whitespaces))"
+    private func cacheKey(title: String, artist: String, duration: TimeInterval) -> String {
+        let durBucket = Int(round(duration))
+        let raw = "\(artist.lowercased().trimmingCharacters(in: .whitespaces)) - \(title.lowercased().trimmingCharacters(in: .whitespaces)) - \(durBucket)"
         let hash = Insecure.MD5.hash(data: Data(raw.utf8))
         return hash.map { String(format: "%02hhx", $0) }.joined()
     }
     
     public func fetchLyrics(title: String, artist: String, album: String, duration: TimeInterval, completion: @escaping (ParsedLyrics?) -> Void) {
-        let cleanT = sanitizeTitle(title)
-        let cleanA = sanitizeArtist(artist)
-        let key = cacheKey(title: cleanT, artist: cleanA)
+        let key = cacheKey(title: title, artist: artist, duration: duration)
         
+        cacheLock.lock()
         if let cached = memoryCache[key] {
+            cacheLock.unlock()
             completion(cached)
             return
         }
+        cacheLock.unlock()
         
         let fileURL = cacheDirectory.appendingPathComponent("\(key).json")
         if let data = try? Data(contentsOf: fileURL),
            let cached = try? JSONDecoder().decode(ParsedLyrics.self, from: data) {
+            cacheLock.lock()
             memoryCache[key] = cached
+            cacheLock.unlock()
             completion(cached)
             return
         }
@@ -128,14 +133,17 @@ public final class LyricsEngine {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             
-            // Tier 1: LRCLIB exact get
+            // Tier 1: LRCLIB exact get (exact title + exact artist + exact duration)
             if let lyrics = self.fetchFromLRCLIB(title: title, artist: artist, album: album, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
                 return
             }
             
-            // Tier 2: LRCLIB cleaned title + artist
+            let cleanT = self.sanitizeTitle(title)
+            let cleanA = self.sanitizeArtist(artist)
+            
+            // Tier 2: LRCLIB cleaned title + primary artist (with duration match)
             if cleanT != title || cleanA != artist {
                 if let lyrics = self.fetchFromLRCLIB(title: cleanT, artist: cleanA, album: "", duration: duration) {
                     self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
@@ -145,24 +153,45 @@ public final class LyricsEngine {
             }
             
             // Tier 3: NetEase CloudSearch Synced API
-            if let lyrics = self.fetchFromNetEase(title: cleanT, artist: cleanA, duration: duration) {
+            if let lyrics = self.fetchFromNetEase(title: title, artist: artist, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
                 return
+            }
+            if cleanT != title {
+                if let lyrics = self.fetchFromNetEase(title: cleanT, artist: cleanA, duration: duration) {
+                    self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
+                    DispatchQueue.main.async { completion(lyrics) }
+                    return
+                }
             }
             
             // Tier 4: Kugou Synced database
-            if let lyrics = self.fetchFromKugou(title: cleanT, artist: cleanA, duration: duration) {
+            if let lyrics = self.fetchFromKugou(title: title, artist: artist, duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
                 return
             }
+            if cleanT != title {
+                if let lyrics = self.fetchFromKugou(title: cleanT, artist: cleanA, duration: duration) {
+                    self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
+                    DispatchQueue.main.async { completion(lyrics) }
+                    return
+                }
+            }
             
             // Tier 5: LRCLIB search query with duration filtering
-            if let lyrics = self.searchLRCLIB(query: "\(cleanT) \(cleanA)", duration: duration) {
+            if let lyrics = self.searchLRCLIB(query: "\(title) \(artist)", duration: duration) {
                 self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
                 DispatchQueue.main.async { completion(lyrics) }
                 return
+            }
+            if cleanT != title {
+                if let lyrics = self.searchLRCLIB(query: "\(cleanT) \(cleanA)", duration: duration) {
+                    self.saveToCache(key: key, fileURL: fileURL, lyrics: lyrics)
+                    DispatchQueue.main.async { completion(lyrics) }
+                    return
+                }
             }
             
             // Tier 6: LRCLIB title-only search
@@ -184,7 +213,9 @@ public final class LyricsEngine {
     }
     
     private func saveToCache(key: String, fileURL: URL, lyrics: ParsedLyrics) {
+        cacheLock.lock()
         memoryCache[key] = lyrics
+        cacheLock.unlock()
         if let data = try? JSONEncoder().encode(lyrics) {
             try? data.write(to: fileURL)
         }
@@ -204,7 +235,7 @@ public final class LyricsEngine {
         
         guard let url = comps?.url else { return nil }
         var request = URLRequest(url: url)
-        request.setValue("Lyrico/1.0 (macOS; Native)", forHTTPHeaderField: "User-Agent")
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", forHTTPHeaderField: "User-Agent")
         
         let semaphore = DispatchSemaphore(value: 0)
         var result: ParsedLyrics?
@@ -232,7 +263,7 @@ public final class LyricsEngine {
               let url = URL(string: "https://lrclib.net/api/search?q=\(encoded)") else { return nil }
         
         var request = URLRequest(url: url)
-        request.setValue("Lyrico/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", forHTTPHeaderField: "User-Agent")
         
         let semaphore = DispatchSemaphore(value: 0)
         var result: ParsedLyrics?
@@ -251,7 +282,6 @@ public final class LyricsEngine {
                 
                 if let best = sortedByDuration.first, let synced = best["syncedLyrics"] as? String {
                     let bestDur = (best["duration"] as? Double) ?? 0
-                    // Duration match within +/- 4.0 seconds if duration is known
                     if duration == 0 || abs(bestDur - duration) <= 4.0 {
                         let lines = self?.parseLRC(synced, duration: duration) ?? []
                         if !lines.isEmpty {
@@ -274,7 +304,7 @@ public final class LyricsEngine {
               let searchURL = URL(string: "https://music.163.com/api/cloudsearch/pc?s=\(encoded)&type=1&offset=0&limit=5") else { return nil }
         
         var searchReq = URLRequest(url: searchURL)
-        searchReq.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+        searchReq.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", forHTTPHeaderField: "User-Agent")
         searchReq.setValue("https://music.163.com", forHTTPHeaderField: "Referer")
         
         let semaphore = DispatchSemaphore(value: 0)
@@ -299,7 +329,7 @@ public final class LyricsEngine {
         }
         
         var lyricReq = URLRequest(url: lyricURL)
-        lyricReq.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+        lyricReq.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", forHTTPHeaderField: "User-Agent")
         
         let dlSem = DispatchSemaphore(value: 0)
         var parsed: ParsedLyrics?
@@ -330,7 +360,7 @@ public final class LyricsEngine {
               let searchURL = URL(string: "http://lyrics.kugou.com/search?ver=1&man=yes&client=pc&keyword=\(encoded)&duration=") else { return nil }
         
         var request = URLRequest(url: searchURL)
-        request.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", forHTTPHeaderField: "User-Agent")
         
         let semaphore = DispatchSemaphore(value: 0)
         var candidateID: String?
@@ -384,7 +414,7 @@ public final class LyricsEngine {
               let url = URL(string: "https://lrclib.net/api/search?q=\(encoded)") else { return nil }
         
         var request = URLRequest(url: url)
-        request.setValue("Lyrico/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", forHTTPHeaderField: "User-Agent")
         
         let semaphore = DispatchSemaphore(value: 0)
         var result: ParsedLyrics?
@@ -569,13 +599,9 @@ public final class LyricsEngine {
             "\\s*[\\(\\[][fF]t\\.?[^\\)\\]]*[\\)\\]]",
             "\\s*[\\(\\[][wW]ith[^\\)\\]]*[\\)\\]]",
             "\\s*[\\(\\[][rR]emaster[^\\)\\]]*[\\)\\]]",
-            "\\s*[\\(\\[][lL]ive[^\\)\\]]*[\\)\\]]",
             "\\s*-\\s*[rR]emastered.*",
-            "\\s*-\\s*[lL]ive.*",
-            "\\s*-\\s*[rR]adio [eE]dit.*",
             "\\s*-\\s*[sS]ingle [vV]ersion.*",
-            "\\s*-\\s*[oO]riginal [mM]ix.*",
-            "\\s*-\\s*[aA]coustic.*"
+            "\\s*-\\s*[oO]fficial [aA]udio.*"
         ]
         
         for p in patterns {
@@ -585,7 +611,6 @@ public final class LyricsEngine {
             }
         }
         
-        if let idx = t.range(of: " - ") { t = String(t[..<idx.lowerBound]) }
         return t.trimmingCharacters(in: .whitespaces)
     }
     
