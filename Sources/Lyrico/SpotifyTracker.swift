@@ -41,6 +41,7 @@ public final class SpotifyTracker {
     public private(set) var currentPosition: TimeInterval = 0.0
     
     public var userOffset: TimeInterval = 0.0
+    public var visualLeadOffset: TimeInterval = 0.28 // 280ms lead matching Apple Music / Spotify native visual onset
     
     private var anchorPosition: TimeInterval = 0.0
     private var anchorHostTime: CFTimeInterval = 0.0
@@ -132,7 +133,8 @@ public final class SpotifyTracker {
             }
             
             self.delegate?.spotifyTracker(self, didChangeState: state)
-            self.delegate?.spotifyTracker(self, didTickPlayback: position + self.userOffset)
+            let effectivePos = max(0.0, position + self.userOffset + self.visualLeadOffset)
+            self.delegate?.spotifyTracker(self, didTickPlayback: effectivePos)
             self.manageDisplayTimer(for: state)
         }
     }
@@ -154,7 +156,8 @@ public final class SpotifyTracker {
             let now = CACurrentMediaTime()
             let elapsed = max(0.0, now - self.anchorHostTime)
             self.currentPosition = self.anchorPosition + elapsed
-            self.delegate?.spotifyTracker(self, didTickPlayback: self.currentPosition + self.userOffset)
+            let effectivePos = max(0.0, self.currentPosition + self.userOffset + self.visualLeadOffset)
+            self.delegate?.spotifyTracker(self, didTickPlayback: effectivePos)
         }
     }
     
@@ -219,8 +222,8 @@ public final class SpotifyTracker {
                 
                 let predictedPos = self.anchorPosition + (estimatedSampleHostTime - self.anchorHostTime)
                 
-                // Only re-anchor if there is a real seek (>1.0s) or track change or state change
-                if abs(predictedPos - rawPos) > 1.0 || stateChanged || isNew {
+                // Only re-anchor if there is a real seek (>1.2s) or track change or state change
+                if abs(predictedPos - rawPos) > 1.2 || stateChanged || isNew {
                     self.anchorPosition = rawPos
                     self.anchorHostTime = estimatedSampleHostTime
                     self.currentPosition = rawPos + max(0.0, CACurrentMediaTime() - estimatedSampleHostTime)

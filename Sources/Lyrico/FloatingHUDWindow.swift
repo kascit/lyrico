@@ -244,7 +244,7 @@ public final class FloatingHUDView: NSView {
         
         if isNewLine && !line.text.isEmpty {
             let pushUpTransition = CATransition()
-            pushUpTransition.duration = 0.26
+            pushUpTransition.duration = 0.16
             pushUpTransition.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             pushUpTransition.type = .push
             pushUpTransition.subtype = .fromBottom
