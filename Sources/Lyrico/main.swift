@@ -25,9 +25,9 @@ final class LyricoApp: NSObject, NSApplicationDelegate, SpotifyTrackerDelegate, 
         ipcServer.delegate = self
         _ = ipcServer.start()
         
-        // 4. Start Spotify Tracker (loads saved userOffset)
+        // 4. Start Spotify Tracker
         spotifyTracker = SpotifyTracker()
-        spotifyTracker.userOffset = ConfigManager.shared.config.userOffset
+        spotifyTracker.userOffset = 0.0
         spotifyTracker.delegate = self
         
         hudWindow.hudView.setStatic(active: "Lyrico", upcoming: "Waiting for Spotify playback...")
@@ -161,17 +161,14 @@ final class LyricoApp: NSObject, NSApplicationDelegate, SpotifyTrackerDelegate, 
             
         case "offset-earlier":
             spotifyTracker.userOffset -= 0.3
-            ConfigManager.shared.updateOffset(spotifyTracker.userOffset)
             return "offset: \(String(format: "%.1f", spotifyTracker.userOffset))s"
             
         case "offset-later":
             spotifyTracker.userOffset += 0.3
-            ConfigManager.shared.updateOffset(spotifyTracker.userOffset)
             return "offset: \(String(format: "%.1f", spotifyTracker.userOffset))s"
             
         case "offset-reset":
             spotifyTracker.userOffset = 0.0
-            ConfigManager.shared.updateOffset(0.0)
             return "offset: 0.0s"
             
         case "cycle-theme", "toggle-theme":
