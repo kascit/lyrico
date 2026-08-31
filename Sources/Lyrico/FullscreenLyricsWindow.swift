@@ -115,6 +115,7 @@ public final class FullscreenLyricsWindow: NSPanel {
 public final class FullscreenLyricsView: NSView {
     private let titleLabel = NSTextField(labelWithString: "")
     private let artistLabel = NSTextField(labelWithString: "")
+    private let unsyncedBadgeLabel = NSTextField(labelWithString: "Unsynced Lyrics • Use ⌥ [ and ⌥ ] to calibrate")
     private let closeHintLabel = NSTextField(labelWithString: "Press Esc or Click anywhere to exit")
     
     private let prevLineLabel = NSTextField(labelWithString: "")
@@ -154,6 +155,14 @@ public final class FullscreenLyricsView: NSView {
         artistLabel.isEditable = false
         artistLabel.drawsBackground = false
         addSubview(artistLabel)
+        
+        unsyncedBadgeLabel.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        unsyncedBadgeLabel.alignment = .center
+        unsyncedBadgeLabel.isBezeled = false
+        unsyncedBadgeLabel.isEditable = false
+        unsyncedBadgeLabel.drawsBackground = false
+        unsyncedBadgeLabel.isHidden = true
+        addSubview(unsyncedBadgeLabel)
         
         closeHintLabel.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         closeHintLabel.alignment = .center
@@ -221,8 +230,9 @@ public final class FullscreenLyricsView: NSView {
         let leftX = (b.width - maxW) / 2
         
         // Header at top
-        titleLabel.frame = NSRect(x: leftX, y: b.height - 110, width: maxW, height: 44)
-        artistLabel.frame = NSRect(x: leftX, y: b.height - 156, width: maxW, height: 30)
+        titleLabel.frame = NSRect(x: leftX, y: b.height - 100, width: maxW, height: 44)
+        artistLabel.frame = NSRect(x: leftX, y: b.height - 142, width: maxW, height: 28)
+        unsyncedBadgeLabel.frame = NSRect(x: leftX, y: b.height - 172, width: maxW, height: 22)
         closeHintLabel.frame = NSRect(x: leftX, y: 35, width: maxW, height: 22)
         
         // Center lyrics column
@@ -238,6 +248,7 @@ public final class FullscreenLyricsView: NSView {
         
         titleLabel.textColor = colors.activeText
         artistLabel.textColor = colors.upcomingText
+        unsyncedBadgeLabel.textColor = colors.sungText.withAlphaComponent(0.85)
         closeHintLabel.textColor = colors.upcomingText.withAlphaComponent(0.40)
         
         prevLineLabel.textColor = colors.sungText.withAlphaComponent(0.35)
@@ -257,6 +268,13 @@ public final class FullscreenLyricsView: NSView {
     public func updateLyrics(lyrics: ParsedLyrics?) {
         self.currentLyrics = lyrics
         self.lastActiveIndex = -2
+        
+        if let l = lyrics, !l.isSynced {
+            unsyncedBadgeLabel.isHidden = false
+        } else {
+            unsyncedBadgeLabel.isHidden = true
+        }
+        
         if lastPosition > 0 {
             tickPlayback(position: lastPosition)
         }

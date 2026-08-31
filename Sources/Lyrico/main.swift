@@ -92,16 +92,18 @@ final class LyricoApp: NSObject, NSApplicationDelegate, SpotifyTrackerDelegate, 
     func spotifyTracker(_ tracker: SpotifyTracker, didTickPlayback position: TimeInterval) {
         guard let lyrics = currentLyrics, !lyrics.lines.isEmpty else { return }
         
+        let isSynced = lyrics.isSynced
         let activeIdx = lyrics.activeLineIndex(at: position)
         
         if activeIdx == -1 {
             // Instrumental Intro before first line
             let firstLineText = lyrics.lines.first?.text ?? ""
-            hudWindow.hudView.setStatic(active: "♫", upcoming: firstLineText)
+            let introUpcoming = isSynced ? firstLineText : "\(firstLineText)  •  [unsynced: ⌥[ ⌥]]"
+            hudWindow.hudView.setStatic(active: "♫", upcoming: introUpcoming)
         } else {
             let activeLine = lyrics.lines[activeIdx]
             let upcomingText = (activeIdx + 1 < lyrics.lines.count) ? lyrics.lines[activeIdx + 1].text : ""
-            hudWindow.hudView.renderKaraoke(line: activeLine, currentPosition: position, upcomingText: upcomingText)
+            hudWindow.hudView.renderKaraoke(line: activeLine, currentPosition: position, upcomingText: upcomingText, isSynced: isSynced)
         }
         
         if fullscreenWindow.isShowingFullscreen {
@@ -161,14 +163,19 @@ final class LyricoApp: NSObject, NSApplicationDelegate, SpotifyTrackerDelegate, 
             
         case "offset-earlier":
             spotifyTracker.userOffset -= 0.5
-            return "offset: \(String(format: "%.1f", spotifyTracker.userOffset))s"
+            let msg = "Sync Offset: \(String(format: "%+.1f", spotifyTracker.userOffset))s"
+            hudWindow.hudView.showToast(message: "⏱ \(msg)")
+            return msg
             
         case "offset-later":
             spotifyTracker.userOffset += 0.5
-            return "offset: \(String(format: "%.1f", spotifyTracker.userOffset))s"
+            let msg = "Sync Offset: \(String(format: "%+.1f", spotifyTracker.userOffset))s"
+            hudWindow.hudView.showToast(message: "⏱ \(msg)")
+            return msg
             
         case "offset-reset":
             spotifyTracker.userOffset = 0.0
+            hudWindow.hudView.showToast(message: "⏱ Sync Offset: 0.0s (Reset)")
             return "offset: 0.0s"
             
         case "cycle-theme", "toggle-theme":

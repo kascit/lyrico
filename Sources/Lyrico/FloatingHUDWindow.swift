@@ -107,6 +107,10 @@ public final class FloatingHUDView: NSView {
     private var lastUpcomingText: String = ""
     private var lastLyricLine: LyricLine?
     private var lastPlaybackPos: TimeInterval = 0.0
+    private var lastIsSynced: Bool = true
+    
+    private var toastTimer: Timer?
+    private var isToastShowing: Bool = false
     
     public override init(frame frameRect: NSRect) {
         self.cardView = NSView(frame: .zero)
@@ -130,6 +134,7 @@ public final class FloatingHUDView: NSView {
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+        toastTimer?.invalidate()
     }
     
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -217,9 +222,30 @@ public final class FloatingHUDView: NSView {
         upcomingLabel.textColor = colors.upcomingText
         
         if let line = lastLyricLine {
-            renderKaraoke(line: line, currentPosition: lastPlaybackPos, upcomingText: lastUpcomingText)
+            renderKaraoke(line: line, currentPosition: lastPlaybackPos, upcomingText: lastUpcomingText, isSynced: lastIsSynced)
         } else if !lastLineText.isEmpty {
             setStatic(active: lastLineText, upcoming: lastUpcomingText)
+        }
+    }
+    
+    public func showToast(message: String) {
+        toastTimer?.invalidate()
+        isToastShowing = true
+        
+        let fadeTransition = CATransition()
+        fadeTransition.duration = 0.15
+        fadeTransition.type = .fade
+        upcomingLabel.layer?.add(fadeTransition, forKey: "toastFade")
+        upcomingLabel.stringValue = message
+        
+        toastTimer = Timer.scheduledTimer(withTimeInterval: 1.6, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            self.isToastShowing = false
+            let restoreTransition = CATransition()
+            restoreTransition.duration = 0.20
+            restoreTransition.type = .fade
+            self.upcomingLabel.layer?.add(restoreTransition, forKey: "toastRestore")
+            self.upcomingLabel.stringValue = self.lastUpcomingText
         }
     }
     
@@ -237,9 +263,10 @@ public final class FloatingHUDView: NSView {
         }
     }
     
-    public func renderKaraoke(line: LyricLine, currentPosition: TimeInterval, upcomingText: String) {
+    public func renderKaraoke(line: LyricLine, currentPosition: TimeInterval, upcomingText: String, isSynced: Bool = true) {
         lastLyricLine = line
         lastPlaybackPos = currentPosition
+        lastIsSynced = isSynced
         let isNewLine = line.text != lastLineText
         
         if isNewLine && !line.text.isEmpty {
@@ -253,14 +280,25 @@ public final class FloatingHUDView: NSView {
         
         lastLineText = line.text
         
-        if upcomingText != lastUpcomingText {
+        let finalUpcomingText: String
+        if isSynced {
+            finalUpcomingText = upcomingText
+        } else {
+            if upcomingText.isEmpty {
+                finalUpcomingText = "Unsynced • Use ⌥[ / ⌥] to calibrate"
+            } else {
+                finalUpcomingText = "\(upcomingText)  •  [unsynced: ⌥[ ⌥]]"
+            }
+        }
+        
+        if !isToastShowing && finalUpcomingText != lastUpcomingText {
             let fadeTransition = CATransition()
             fadeTransition.duration = 0.20
             fadeTransition.timingFunction = CAMediaTimingFunction(name: .easeOut)
             fadeTransition.type = .fade
             upcomingLabel.layer?.add(fadeTransition, forKey: "upcomingFade")
-            upcomingLabel.stringValue = upcomingText
-            lastUpcomingText = upcomingText
+            upcomingLabel.stringValue = finalUpcomingText
+            lastUpcomingText = finalUpcomingText
         }
         
         let colors = ThemeManager.shared.resolveColors()
@@ -323,7 +361,9 @@ public final class FloatingHUDView: NSView {
         ]
         
         activeLabel.attributedStringValue = NSAttributedString(string: active.isEmpty ? "♫" : active, attributes: attrs)
-        upcomingLabel.stringValue = upcoming
+        if !isToastShowing {
+            upcomingLabel.stringValue = upcoming
+        }
         
         lastLineText = active
         lastUpcomingText = upcoming
