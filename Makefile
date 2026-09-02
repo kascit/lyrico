@@ -1,4 +1,4 @@
-PREFIX ?= /Users/dhanurr/.config/aerospace
+PREFIX ?= $(HOME)/.config/aerospace
 BINDIR = $(PREFIX)/bin
 
 .PHONY: all build release install clean uninstall run
@@ -25,4 +25,3 @@ run: release
 
 clean:
 	swift package clean
-	rm -rf .build
