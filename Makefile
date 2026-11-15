@@ -15,6 +15,7 @@ install: release
 	mkdir -p $(BINDIR)
 	cp .build/release/lyrico $(BINDIR)/lyrico
 	chmod +x $(BINDIR)/lyrico
+	codesign --sign - --force --deep $(BINDIR)/lyrico
 	@echo "✅ Installed lyrico to $(BINDIR)/lyrico"
 
 uninstall:
