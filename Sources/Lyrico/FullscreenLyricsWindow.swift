@@ -1,9 +1,11 @@
 import Cocoa
 import QuartzCore
+import IOKit.pwr_mgt
 
 public final class FullscreenLyricsWindow: NSPanel {
     public let fullscreenView: FullscreenLyricsView
     public private(set) var isShowingFullscreen: Bool = false
+    private var sleepAssertionID: IOPMAssertionID = 0
     
     public override var canBecomeKey: Bool { return true }
     public override var canBecomeMain: Bool { return true }
@@ -42,6 +44,7 @@ public final class FullscreenLyricsWindow: NSPanel {
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+        allowSleep()
     }
     
     @objc private func handleThemeDidChange() {
@@ -60,6 +63,7 @@ public final class FullscreenLyricsWindow: NSPanel {
         self.fullscreenView.applyTheme()
         
         isShowingFullscreen = true
+        preventSleep()
         self.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         
@@ -76,6 +80,7 @@ public final class FullscreenLyricsWindow: NSPanel {
     
     public func hideFullscreen(animated: Bool = true) {
         isShowingFullscreen = false
+        allowSleep()
         
         if animated {
             NSAnimationContext.runAnimationGroup({ ctx in
@@ -97,6 +102,26 @@ public final class FullscreenLyricsWindow: NSPanel {
         } else {
             showFullscreen(animated: animated)
         }
+    }
+    
+    private func preventSleep() {
+        guard sleepAssertionID == 0 else { return }
+        let reason = "Lyrico fullscreen lyrics" as CFString
+        let result = IOPMAssertionCreateWithName(
+            kIOPMAssertionTypeNoDisplaySleep as CFString,
+            IOPMAssertionLevel(kIOPMAssertionLevelOn),
+            reason,
+            &sleepAssertionID
+        )
+        if result != kIOReturnSuccess {
+            sleepAssertionID = 0
+        }
+    }
+    
+    private func allowSleep() {
+        guard sleepAssertionID != 0 else { return }
+        IOPMAssertionRelease(sleepAssertionID)
+        sleepAssertionID = 0
     }
     
     public override func keyDown(with event: NSEvent) {

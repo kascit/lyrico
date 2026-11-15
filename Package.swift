@@ -14,7 +14,10 @@ let package = Package(
         .executableTarget(
             name: "Lyrico",
             dependencies: [],
-            path: "Sources/Lyrico"
+            path: "Sources/Lyrico",
+            linkerSettings: [
+                .linkedFramework("IOKit")
+            ]
         )
     ]
 )
